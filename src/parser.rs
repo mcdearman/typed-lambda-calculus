@@ -47,7 +47,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     let expr = recursive(|expr| {
         // parse int
         let int = text::int(10)
-            .map(|s: String| Expr::Int(s.parse().unwrap()))
+            .map(|s: &str| Expr::Int(s.parse().unwrap()))
             .padded();
 
         // parse bool
@@ -77,12 +77,12 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     // parse let
     let decl = recursive(|decl| {
         let let_ = text::keyword("let")
-            .ignore_then(text::ident())
+            .ignore_then(var)
             .then_ignore(just('='))
             .then(expr.clone())
             .then_ignore(text::keyword("in"))
-            .then(decl)
-            .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)))
+            .then(decl.clone())
+            .map(|((name, val), body)| Expr::Let(name.into(), Box::new(val), Box::new(body)))
             .padded();
 
         let_.or(expr).padded()

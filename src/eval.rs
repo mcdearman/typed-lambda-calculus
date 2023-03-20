@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use crate::parser::Expr;
 
 #[derive(Debug, Clone)]
-pub struct Env(HashMap<String, Expr>);
+pub struct Env<'a>(HashMap<String, Expr<'a>>);
 
-impl Env {
+impl Env<'_> {
     pub fn new() -> Self {
         Self(HashMap::new())
     }
@@ -19,7 +19,7 @@ impl Env {
     }
 }
 
-pub fn eval(mut env: &Env, expr: &Expr) -> Result<Expr, String> {
+pub fn eval<'a>(mut env: &Env, expr: &Expr) -> Result<Expr<'a>, String> {
     match expr {
         lit @ Expr::Int(_) | lit @ Expr::Bool(_) => Ok(lit.clone()),
         Expr::Var(name) => env
