@@ -1,33 +1,20 @@
 use std::fmt::Display;
 
 use chumsky::prelude::*;
-// use logos::Logos;
 
-// #[derive(Logos, Debug, Clone, PartialEq)]
-// pub enum Token {
-//     #[regex(r"[0-9]+", |lex| lex.slice().parse())]
-//     Int(i64),
-//     #[regex(r"true|false", |lex| lex.slice().parse())]
-//     Bool(bool),
-//     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_string())]
-//     Var(String),
-//     #[token("\\")]
-//     Lambda,
-//     #[error]
-//     Err,
-// }
+use crate::intern::Ident;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expr<'a> {
+pub enum Expr {
     Int(i64),
     Bool(bool),
-    Var(&'a str),
-    Lambda(&'a str, Box<Expr<'a>>),
-    Apply(Box<Expr<'a>>, Box<Expr<'a>>),
-    Let(&'a str, Box<Expr<'a>>, Box<Expr<'a>>),
+    Var(Ident),
+    Lambda(Ident, Box<Expr>),
+    Apply(Box<Expr>, Box<Expr>),
+    Let(Ident, Box<Expr>, Box<Expr>),
 }
 
-impl<'a> Display for Expr<'a> {
+impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Int(n) => write!(f, "{}", n),
@@ -40,7 +27,7 @@ impl<'a> Display for Expr<'a> {
     }
 }
 
-pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
+pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr> {
     // parse var
     let ident = text::ident().padded();
 
@@ -61,7 +48,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
             .then(text::ident())
             .then_ignore(text::keyword("->"))
             .then(expr.clone())
-            .map(|((_, arg), body)| Expr::Lambda(arg, Box::new(body)))
+            .map(|((_, arg), body)| Expr::Lambda(Ident::from(arg), Box::new(body)))
             .padded();
 
         // parse apply
@@ -72,24 +59,24 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
             .padded();
 
         // parse var
-        let var = ident.map(|s: &str| Expr::Var(s)).padded();
+        let var = ident.map(|s: &str| Expr::Var(s.into())).padded();
 
-        int.or(bool).or(lambda).or(apply).then_ignore(end())
+        int.or(bool).or(lambda).or(apply).or(var).then_ignore(end())
     });
 
     // parse let
-    let decl = recursive(|decl| {
-        let r#let = text::keyword("let")
+    let bind = recursive(|bind| {
+        let let_ = text::keyword("let")
             .ignore_then(ident)
             .then_ignore(just('='))
             .then(expr.clone())
             .then_ignore(text::keyword("in"))
-            .then(decl.clone())
-            .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)))
+            .then(bind.clone())
+            .map(|((name, val), body)| Expr::Let(Ident::from(name), Box::new(val), Box::new(body)))
             .padded();
 
-        r#let.or(expr).padded()
+        let_.or(expr).padded()
     });
 
-    decl
+    bind
 }

@@ -1,30 +1,8 @@
-use std::collections::HashMap;
+use crate::{intern::Ident, parser::Expr};
 
-use crate::parser::Expr;
-
-// #[derive(Debug, Clone)]
-// pub struct Env<'a>(HashMap<&'a str, Expr<'a>>);
-
-// impl<'a> Env<'a> {
-//     pub fn new() -> Self {
-//         Self(HashMap::new())
-//     }
-
-//     pub fn insert(&mut self, name: String, value: Expr<'_>) {
-//         self.0.insert(name, value.clone());
-//     }
-
-//     pub fn lookup(&self, name: &str) -> Option<&Expr> {
-//         self.0.get(name)
-//     }
-// }
-
-pub fn eval<'a>(
-    env: &mut Vec<(&'a str, &'a Expr<'a>)>,
-    expr: &'a Expr<'a>,
-) -> Result<&'a Expr<'a>, String> {
+pub fn eval(env: &mut Vec<(Ident, Expr)>, expr: &Expr) -> Result<Expr, String> {
     match expr {
-        lit @ Expr::Int(_) | lit @ Expr::Bool(_) => Ok(lit),
+        lit @ Expr::Int(_) | lit @ Expr::Bool(_) => Ok(lit.clone()),
         Expr::Var(name) => {
             if let Some((_, val)) = env.iter().rev().find(|(var, _)| var == name) {
                 Ok(val.clone())
@@ -32,8 +10,17 @@ pub fn eval<'a>(
                 Err(format!("Unbound variable: {}", name))
             }
         }
-        Expr::Lambda(param, body) => todo!(),
-        Expr::Apply(_, _) => todo!(),
-        Expr::Let(name, val, body) => todo!(),
+        lambda @ Expr::Lambda(_, _) => Ok(lambda.clone()),
+        Expr::Apply(lambda, value) => match lambda.as_ref() {
+            Expr::Lambda(param, body) => {
+                env.push((param.clone(), *value.clone()));
+                eval(env, body)
+            }
+            _ => Err(format!("Expected callable lambda, got {}", lambda)),
+        },
+        Expr::Let(name, val, body) => {
+            env.push((name.clone(), *val.clone()));
+            eval(env, body)
+        }
     }
 }
