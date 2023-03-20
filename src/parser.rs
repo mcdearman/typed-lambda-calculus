@@ -59,9 +59,9 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr> {
             .padded();
 
         // parse var
-        let var = ident.map(|s: &str| Expr::Var(s.into())).padded();
+        let var = ident.map(|s: &str| Expr::Var(s.into()));
 
-        int.or(bool).or(lambda).or(apply).or(var).then_ignore(end())
+        int.or(bool).or(lambda).or(apply).or(var)
     });
 
     // parse let
@@ -72,8 +72,7 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr> {
             .then(expr.clone())
             .then_ignore(text::keyword("in"))
             .then(bind.clone())
-            .map(|((name, val), body)| Expr::Let(Ident::from(name), Box::new(val), Box::new(body)))
-            .padded();
+            .map(|((name, val), body)| Expr::Let(Ident::from(name), Box::new(val), Box::new(body)));
 
         let_.or(expr).padded()
     });

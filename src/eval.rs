@@ -2,7 +2,7 @@ use crate::{intern::Ident, parser::Expr};
 
 pub fn eval(env: &mut Vec<(Ident, Expr)>, expr: &Expr) -> Result<Expr, String> {
     match expr {
-        lit @ Expr::Int(_) | lit @ Expr::Bool(_) => Ok(lit.clone()),
+        lit @ Expr::Int(_) | lit @ Expr::Bool(_) | lit @ Expr::Lambda(_, _) => Ok(lit.clone()),
         Expr::Var(name) => {
             if let Some((_, val)) = env.iter().rev().find(|(var, _)| var == name) {
                 Ok(val.clone())
@@ -10,7 +10,6 @@ pub fn eval(env: &mut Vec<(Ident, Expr)>, expr: &Expr) -> Result<Expr, String> {
                 Err(format!("Unbound variable: {}", name))
             }
         }
-        lambda @ Expr::Lambda(_, _) => Ok(lambda.clone()),
         Expr::Apply(lambda, value) => match lambda.as_ref() {
             Expr::Lambda(param, body) => {
                 env.push((param.clone(), *value.clone()));
