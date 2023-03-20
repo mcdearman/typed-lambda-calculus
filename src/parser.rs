@@ -24,7 +24,7 @@ pub enum Expr<'a> {
     Var(&'a str),
     Lambda(&'a str, Box<Expr<'a>>),
     Apply(Box<Expr<'a>>, Box<Expr<'a>>),
-    Let(String, Box<Expr<'a>>, Box<Expr<'a>>),
+    Let(&'a str, Box<Expr<'a>>, Box<Expr<'a>>),
 }
 
 impl<'a> Display for Expr<'a> {
@@ -42,7 +42,7 @@ impl<'a> Display for Expr<'a> {
 
 pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
     // parse var
-    let var = text::ident().padded();
+    let ident = text::ident().padded();
 
     let expr = recursive(|expr| {
         // parse int
@@ -71,22 +71,25 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr<'a>> {
             .map(|(fun, arg)| Expr::Apply(Box::new(fun), Box::new(arg)))
             .padded();
 
+        // parse var
+        let var = ident.map(|s: &str| Expr::Var(s)).padded();
+
         int.or(bool).or(lambda).or(apply).then_ignore(end())
     });
 
     // parse let
     let decl = recursive(|decl| {
-        let let_ = text::keyword("let")
-            .ignore_then(var)
+        let r#let = text::keyword("let")
+            .ignore_then(ident)
             .then_ignore(just('='))
             .then(expr.clone())
             .then_ignore(text::keyword("in"))
             .then(decl.clone())
-            .map(|((name, val), body)| Expr::Let(name.into(), Box::new(val), Box::new(body)))
+            .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)))
             .padded();
 
-        let_.or(expr).padded()
+        r#let.or(expr).padded()
     });
 
-    expr
+    decl
 }
