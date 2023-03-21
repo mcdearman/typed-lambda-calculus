@@ -72,13 +72,15 @@ pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr> {
         // parse operators
         let op = |c| just(c).padded();
 
+        let unary = int.or(var.clone()).or(apply.clone());
+
         // parse product
-        let product = int.or(var.clone()).or(apply.clone()).foldl(
+        let product = unary.clone().foldl(
             choice((
                 op('*').to(Expr::Mul as fn(_, _) -> _),
                 op('/').to(Expr::Div as fn(_, _) -> _),
             ))
-            .then(expr)
+            .then(unary)
             .repeated(),
             |l, (op, r)| op(Box::new(l), Box::new(r)),
         );
