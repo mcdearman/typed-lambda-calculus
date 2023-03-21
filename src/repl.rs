@@ -33,7 +33,9 @@ pub fn repl() {
     loop {
         match rl.readline("> ") {
             Ok(line) => {
-                match parser().parse(&line).into_result() {
+                let ast = parser().parse(&line).into_result();
+                println!("AST: {:?}", ast.clone().unwrap());
+                match ast {
                     Ok(ast) => match eval(&mut env, &ast) {
                         Ok(result) => println!("{}", result),
                         Err(err) => eprintln!("RuntimeError: {}", err),

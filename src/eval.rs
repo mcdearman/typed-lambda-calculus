@@ -21,5 +21,21 @@ pub fn eval(env: &mut Vec<(Ident, Expr)>, expr: &Expr) -> Result<Expr, String> {
             env.push((name.clone(), *val.clone()));
             eval(env, body)
         }
+        Expr::Add(l, r) => match (l.as_ref(), r.as_ref()) {
+            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l + r)),
+            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+        },
+        Expr::Sub(l, r) => match (l.as_ref(), r.as_ref()) {
+            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l - r)),
+            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+        },
+        Expr::Mul(l, r) => match (l.as_ref(), r.as_ref()) {
+            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l * r)),
+            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+        },
+        Expr::Div(l, r) => match (l.as_ref(), r.as_ref()) {
+            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l / r)),
+            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+        },
     }
 }
