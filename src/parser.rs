@@ -81,13 +81,6 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>() -> impl
                 Token::Bool(b) => Expr::Bool(b),
             };
 
-            let atom = choice((
-                val,
-                ident.map(Expr::Var),
-                expr.clone()
-                    .delimited_by(just(Token::LParen), just(Token::RParen)),
-            ));
-
             // parse let
             let let_ = just(Token::Let)
                 .ignore_then(ident)
@@ -99,15 +92,22 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>() -> impl
                     Expr::Let(Ident::from(name), Box::new(val), Box::new(body))
                 });
 
+            let atom = choice((
+                val,
+                ident.map(Expr::Var),
+                expr.clone()
+                    .delimited_by(just(Token::LParen), just(Token::RParen)),
+            ));
+
             // parse function application
             let apply = atom.clone().foldl(atom.clone().repeated(), |f, arg| {
                 Expr::Apply(Box::new(f), Box::new(arg))
             });
 
-            apply
+            choice((let_, apply, atom))
         });
 
-        expr
+        inline_expr
     });
 
     expr
