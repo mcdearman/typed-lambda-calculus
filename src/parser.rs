@@ -1,8 +1,43 @@
 use std::fmt::Display;
 
-use chumsky::{prelude::*, text::keyword};
+use chumsky::{input::ValueInput, prelude::*, primitive::select, text::keyword};
+use logos::Logos;
 
 use crate::intern::Ident;
+
+#[derive(Logos, Debug, Clone, PartialEq)]
+pub enum Token {
+    #[regex(r"\d+", |lex| lex.slice().parse())]
+    Int(i64),
+    #[regex(r"true|false", |lex| lex.slice().parse())]
+    Bool(bool),
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| Ident::from(lex.slice()))]
+    Ident(Ident),
+    #[token("\\")]
+    Lambda,
+    #[token("->")]
+    Arrow,
+    #[token("=")]
+    Eq,
+    #[token("let")]
+    Let,
+    #[token("in")]
+    In,
+    #[token("+")]
+    Add,
+    #[token("-")]
+    Sub,
+    #[token("*")]
+    Mul,
+    #[token("/")]
+    Div,
+    #[token("(")]
+    LParen,
+    #[token(")")]
+    RParen,
+    #[error]
+    Err,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
@@ -35,82 +70,45 @@ impl Display for Expr {
     }
 }
 
-pub fn parser<'a>() -> impl Parser<'a, &'a str, Expr> {
-    // parse var
-    let ident = text::ident().padded();
+pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>() -> impl Parser<'a, I, Expr>
+{
+    let ident = select! { Token::Ident(name) => name };
 
     let expr = recursive(|expr| {
-        // parse int
-        let int = text::int(10)
-            .map(|s: &str| Expr::Int(s.parse().unwrap()))
-            .padded();
+        let inline_expr = recursive(|inline_expr| {
+            let val = select! {
+                Token::Int(n) => Expr::Int(n),
+                Token::Bool(b) => Expr::Bool(b),
+            };
 
-        // parse bool
-        let bool = keyword("true")
-            .map(|_| Expr::Bool(true))
-            .or(keyword("false").map(|_| Expr::Bool(false)))
-            .padded();
+            let atom = choice((
+                val,
+                ident.map(Expr::Var),
+                expr.clone()
+                    .delimited_by(just(Token::LParen), just(Token::RParen)),
+            ));
 
-        // parse lambda
-        let lambda = keyword("\\")
-            .then(ident)
-            .then_ignore(keyword("->"))
-            .then(expr.clone())
-            .map(|((_, arg), body)| Expr::Lambda(Ident::from(arg), Box::new(body)))
-            .padded();
+            // parse let
+            let let_ = just(Token::Let)
+                .ignore_then(ident)
+                .then_ignore(just(Token::Eq))
+                .then(inline_expr.clone())
+                .then_ignore(just(Token::In))
+                .then(expr.clone())
+                .map(|((name, val), body)| {
+                    Expr::Let(Ident::from(name), Box::new(val), Box::new(body))
+                });
 
-        // parse apply
-        let apply = expr
-            .clone()
-            .then(expr.clone())
-            .map(|(fun, arg)| Expr::Apply(Box::new(fun), Box::new(arg)))
-            .padded();
+            // parse function application
+            let apply = atom.clone().foldl(atom.clone().repeated(), |f, arg| {
+                Expr::Apply(Box::new(f), Box::new(arg))
+            });
 
-        // parse var
-        let var = ident.map(|s: &str| Expr::Var(s.into()));
+            apply
+        });
 
-        // parse operators
-        let op = |c| just(c).padded();
-
-        let unary = int.or(var.clone()).or(apply.clone());
-
-        // parse product
-        let product = unary.clone().foldl(
-            choice((
-                op('*').to(Expr::Mul as fn(_, _) -> _),
-                op('/').to(Expr::Div as fn(_, _) -> _),
-            ))
-            .then(unary)
-            .repeated(),
-            |l, (op, r)| op(Box::new(l), Box::new(r)),
-        );
-
-        // parse sum
-        let sum = product.clone().foldl(
-            choice((
-                op('+').to(Expr::Add as fn(_, _) -> _),
-                op('-').to(Expr::Sub as fn(_, _) -> _),
-            ))
-            .then(product)
-            .repeated(),
-            |l, (op, r)| op(Box::new(l), Box::new(r)),
-        );
-
-        int.or(bool).or(lambda).or(apply).or(var).or(sum).padded()
+        expr
     });
 
-    // parse let
-    let bind = recursive(|bind| {
-        let let_ = keyword("let")
-            .ignore_then(ident)
-            .then_ignore(just('='))
-            .then(expr.clone())
-            .then_ignore(keyword("in"))
-            .then(bind.clone())
-            .map(|((name, val), body)| Expr::Let(Ident::from(name), Box::new(val), Box::new(body)));
-
-        let_.or(expr).padded()
-    });
-
-    bind
+    expr
 }
