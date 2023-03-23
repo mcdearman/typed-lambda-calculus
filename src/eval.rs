@@ -50,15 +50,15 @@ pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Expr, String> {
         }
         Expr::Apply(lambda, value) => match eval(env.clone(), lambda)? {
             Expr::Lambda(param, body) => {
-                env.as_ref()
-                    .borrow_mut()
-                    .define(param.clone(), *value.clone());
+                let val = eval(env.clone(), &value)?;
+                env.as_ref().borrow_mut().define(param.clone(), val);
                 eval(env, &body)
             }
-            _ => Err(format!("Expected callable lambda, got {}", lambda)),
+            _ => Err(format!("Expected callable lambda, got {:?}", lambda)),
         },
-        Expr::Let(name, val, body) => {
-            env.as_ref().borrow_mut().define(name.clone(), *val.clone());
+        Expr::Let(name, value, body) => {
+            let val = eval(env.clone(), &value)?;
+            env.as_ref().borrow_mut().define(name.clone(), val);
             eval(env, body)
         }
         Expr::Add(l, r) => match (
