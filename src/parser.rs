@@ -119,11 +119,14 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
                             Expr::Let(Ident::from(name), Box::new(val), Box::new(body))
                         });
 
-                    let lambda = just(Token::Lambda)
-                        .ignore_then(ident)
-                        .then_ignore(just(Token::Arrow))
-                        .then(expr.clone())
-                        .map(|(param, body)| Expr::Lambda(Ident::from(param), Box::new(body)));
+                    // parse curry lambda
+                    let lambda = just(Token::Lambda).ignore_then(
+                        ident
+                            .repeated()
+                            .foldr(just(Token::Arrow).ignore_then(expr.clone()), |arg, body| {
+                                Expr::Lambda(Ident::from(arg), Box::new(body))
+                            }),
+                    );
 
                     let atom = choice((
                         val,
