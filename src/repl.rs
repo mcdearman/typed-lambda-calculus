@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use chumsky::{
     input::Stream,
     prelude::{Input, Simple},
@@ -36,12 +38,17 @@ impl ReplHelper {
 pub fn repl() {
     let mut rl = Editor::new().expect("failed to create editor");
     rl.set_helper(Some(ReplHelper::new()));
-    let env = Box::new(Env::new());
+    let env = Rc::new(RefCell::new(Env::new()));
 
     println!("Welcome to the Lust REPL!");
     loop {
         match rl.readline("> ") {
             Ok(line) => {
+                let lexer = Token::lexer(&line);
+                let tokens = lexer.clone().spanned().collect::<Vec<_>>();
+
+                println!("Tokens: {:?}", tokens);
+
                 let lex = Token::lexer(&line)
                     .spanned()
                     .map(|(tok, span)| (tok, SimpleSpan::from(span)));
