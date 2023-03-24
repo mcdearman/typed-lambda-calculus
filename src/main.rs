@@ -230,8 +230,61 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 pub enum Type {
     Int,
     Bool,
-    Var(String),
+    Var(usize),
     Lambda(Box<Self>, Box<Self>),
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Int => write!(f, "Int"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Var(n) => write!(f, "t{}", n),
+            Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeEnv {
+    bindings: HashMap<Ident, Type>,
+    counter: usize,
+}
+
+impl TypeEnv {
+    pub fn new() -> Self {
+        Self {
+            bindings: HashMap::new(),
+            counter: 0,
+        }
+    }
+
+    pub fn fresh(&mut self) -> Type {
+        let ty = Type::Var(self.counter);
+        self.counter += 1;
+        ty
+    }
+
+    pub fn bind(&mut self, name: Ident, ty: Type) {
+        self.bindings.insert(name, ty);
+    }
+
+    pub fn lookup(&self, name: &Ident) -> Option<Type> {
+        self.bindings.get(name).cloned()
+    }
+}
+
+pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
+    match (t1, t2) {
+        (Type::Int, Type::Int) => Ok(Type::Int),
+        (Type::Bool, Type::Bool) => Ok(Type::Bool),
+        (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
+            let p = unify(p1, p2)?;
+            let b = unify(b1, b2)?;
+            Ok(Type::Lambda(Box::new(p), Box::new(b)))
+        }
+        _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
+    }
 }
 
 // =========================
