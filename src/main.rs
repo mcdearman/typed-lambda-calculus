@@ -93,22 +93,22 @@ pub enum Token {
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Token::Int(n) => write!(f, "{}", n),
-            Token::Bool(b) => write!(f, "{}", b),
-            Token::Ident(name) => write!(f, "{}", name),
-            Token::Lambda => write!(f, "\\"),
-            Token::Arrow => write!(f, "->"),
-            Token::Eq => write!(f, "="),
-            Token::Let => write!(f, "let"),
-            Token::In => write!(f, "in"),
-            Token::Add => write!(f, "+"),
-            Token::Sub => write!(f, "-"),
-            Token::Mul => write!(f, "*"),
-            Token::Div => write!(f, "/"),
-            Token::LParen => write!(f, "("),
-            Token::RParen => write!(f, ")"),
-            Token::Err => write!(f, "error"),
-            Token::Whitespace => write!(f, "WS"),
+            Self::Int(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Ident(name) => write!(f, "{}", name),
+            Self::Lambda => write!(f, "\\"),
+            Self::Arrow => write!(f, "->"),
+            Self::Eq => write!(f, "="),
+            Self::Let => write!(f, "let"),
+            Self::In => write!(f, "in"),
+            Self::Add => write!(f, "+"),
+            Self::Sub => write!(f, "-"),
+            Self::Mul => write!(f, "*"),
+            Self::Div => write!(f, "/"),
+            Self::LParen => write!(f, "("),
+            Self::RParen => write!(f, ")"),
+            Self::Err => write!(f, "error"),
+            Self::Whitespace => write!(f, "WS"),
         }
     }
 }
@@ -118,28 +118,28 @@ pub enum Expr {
     Int(i64),
     Bool(bool),
     Var(Ident),
-    Lambda(Ident, Box<Expr>),
-    Apply(Box<Expr>, Box<Expr>),
-    Let(Ident, Box<Expr>, Box<Expr>),
-    Add(Box<Expr>, Box<Expr>),
-    Sub(Box<Expr>, Box<Expr>),
-    Mul(Box<Expr>, Box<Expr>),
-    Div(Box<Expr>, Box<Expr>),
+    Lambda(Ident, Box<Self>),
+    Apply(Box<Self>, Box<Self>),
+    Let(Ident, Box<Self>, Box<Self>),
+    Add(Box<Self>, Box<Self>),
+    Sub(Box<Self>, Box<Self>),
+    Mul(Box<Self>, Box<Self>),
+    Div(Box<Self>, Box<Self>),
 }
 
 impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Expr::Int(n) => write!(f, "{}", n),
-            Expr::Bool(b) => write!(f, "{}", b),
-            Expr::Var(name) => write!(f, "{}", name),
-            Expr::Lambda(param, body) => write!(f, "\\{} -> {}", param, body),
-            Expr::Apply(fun, arg) => write!(f, "({} {})", fun, arg),
-            Expr::Let(name, val, body) => write!(f, "let {} = {} in {}", name, val, body),
-            Expr::Add(l, r) => write!(f, "({} + {})", l, r),
-            Expr::Sub(l, r) => write!(f, "({} - {})", l, r),
-            Expr::Mul(l, r) => write!(f, "({} * {})", l, r),
-            Expr::Div(l, r) => write!(f, "({} / {})", l, r),
+            Self::Int(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Var(name) => write!(f, "{}", name),
+            Self::Lambda(param, body) => write!(f, "\\{} -> {}", param, body),
+            Self::Apply(fun, arg) => write!(f, "({} {})", fun, arg),
+            Self::Let(name, val, body) => write!(f, "let {} = {} in {}", name, val, body),
+            Self::Add(l, r) => write!(f, "({} + {})", l, r),
+            Self::Sub(l, r) => write!(f, "({} - {})", l, r),
+            Self::Mul(l, r) => write!(f, "({} * {})", l, r),
+            Self::Div(l, r) => write!(f, "({} / {})", l, r),
         }
     }
 }
@@ -274,28 +274,52 @@ impl Env {
     }
 }
 
-pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Expr, String> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Int(i64),
+    Bool(bool),
+    Lambda(Ident, Box<Expr>, Rc<RefCell<Env>>),
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Int(n) => write!(f, "{}", n),
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Lambda(param, body, _) => write!(f, "\\{} -> {}", param, body),
+        }
+    }
+}
+
+pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
     match expr {
-        lit @ Expr::Int(_) | lit @ Expr::Bool(_) | lit @ Expr::Lambda(_, _) => Ok(lit.clone()),
+        Expr::Int(i) => Ok(Value::Int(*i)),
+        Expr::Bool(b) => Ok(Value::Bool(*b)),
+        Expr::Lambda(p, b) => {
+            let fn_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
+            Ok(Value::Lambda(p.clone(), b.clone(), fn_env))
+        }
         Expr::Var(name) => {
             if let Some(val) = env.as_ref().borrow().lookup(name) {
-                Ok(val.clone())
+                eval(env.clone(), &val)
             } else {
                 Err(format!("Unbound variable `{}`", name))
             }
         }
         Expr::Apply(lambda, value) => match eval(env.clone(), lambda)? {
-            Expr::Lambda(param, body) => {
-                let val = eval(env.clone(), &value)?;
-                let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
-                child_env.as_ref().borrow_mut().define(param.clone(), val);
-                eval(child_env, &body)
+            Value::Lambda(param, body, fn_env) => {
+                fn_env
+                    .as_ref()
+                    .borrow_mut()
+                    .define(param.clone(), *value.clone());
+                eval(fn_env, &body)
             }
             _ => Err(format!("Expected callable lambda, got `{:?}`", lambda)),
         },
         Expr::Let(name, value, body) => {
-            let val = eval(env.clone(), &value)?;
-            env.as_ref().borrow_mut().define(name.clone(), val);
+            env.as_ref()
+                .borrow_mut()
+                .define(name.clone(), *value.clone());
             let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
             eval(child_env, body)
         }
@@ -303,28 +327,28 @@ pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Expr, String> {
             eval(env.clone(), l.as_ref())?,
             eval(env.clone(), r.as_ref())?,
         ) {
-            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l + r)),
+            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
         },
         Expr::Sub(l, r) => match (
             eval(env.clone(), l.as_ref())?,
             eval(env.clone(), r.as_ref())?,
         ) {
-            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l - r)),
+            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
         },
         Expr::Mul(l, r) => match (
             eval(env.clone(), l.as_ref())?,
             eval(env.clone(), r.as_ref())?,
         ) {
-            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l * r)),
+            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
         },
         Expr::Div(l, r) => match (
             eval(env.clone(), l.as_ref())?,
             eval(env.clone(), r.as_ref())?,
         ) {
-            (Expr::Int(l), Expr::Int(r)) => Ok(Expr::Int(l / r)),
+            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l / r)),
             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
         },
     }
