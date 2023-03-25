@@ -13,9 +13,9 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::{cell::RefCell, rc::Rc};
 
-// =========================
-// =       Interner        =
-// =========================
+// =====================================================================
+// =                           Interner                                =
+// =====================================================================
 
 pub static mut INTERNER: Lazy<ThreadedRodeo> = Lazy::new(|| ThreadedRodeo::default());
 
@@ -50,9 +50,9 @@ impl Display for Ident {
     }
 }
 
-// =========================
-// =        Parser         =
-// =========================
+// =====================================================================
+// =                            Parser                                 =
+// =====================================================================
 
 #[derive(Logos, Debug, Clone, PartialEq)]
 pub enum Token {
@@ -222,9 +222,9 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
     expr
 }
 
-// =========================
-// =         Types         =
-// =========================
+// =====================================================================
+// =                             Types                                 =
+// =====================================================================
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -287,9 +287,9 @@ pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
     }
 }
 
-// =========================
-// =         Eval          =
-// =========================
+// =====================================================================
+// =                             Eval                                  =
+// =====================================================================
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Env {
@@ -370,10 +370,11 @@ pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
             _ => Err(format!("Expected callable lambda, got `{:?}`", lambda)),
         },
         Expr::Let(name, value, body) => {
-            env.as_ref()
+            let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
+            child_env
+                .as_ref()
                 .borrow_mut()
                 .define(name.clone(), *value.clone());
-            let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
             eval(child_env, body)
         }
         Expr::Add(l, r) => match (
@@ -407,9 +408,9 @@ pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
     }
 }
 
-// =========================
-// =         REPL          =
-// =========================
+// =====================================================================
+// =                             REPL                                  =
+// =====================================================================
 
 #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
 struct ReplHelper {
@@ -476,9 +477,9 @@ pub fn repl() {
     }
 }
 
-// =========================
-// =         Main          =
-// =========================
+// =====================================================================
+// =                             Main                                  =
+// =====================================================================
 
 fn main() {
     repl();
