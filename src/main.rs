@@ -11,6 +11,8 @@ use rustyline::{
 };
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
+use std::fs;
+use std::fs::File;
 use std::{cell::RefCell, rc::Rc};
 
 // =====================================================================
@@ -482,5 +484,12 @@ pub fn repl() {
 // =====================================================================
 
 fn main() {
-    repl();
+    let src = fs::read_to_string("examples/multiline.tlc").expect("failed to read file");
+    let lex = Token::lexer(&src)
+        .spanned()
+        .map(|(tok, span)| (tok, SimpleSpan::from(span)));
+    let tok_stream = Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
+    let ast = parser().parse(tok_stream).into_result();
+    println!("{:?}", ast);
+    // repl();
 }
