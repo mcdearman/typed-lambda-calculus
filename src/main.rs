@@ -274,7 +274,7 @@ impl TypeEnv {
     }
 
     pub fn lookup(&self, name: &Ident) -> Option<Type> {
-        self.bindings.get(name).cloned() 
+        self.bindings.get(name).cloned()
     }
 }
 
