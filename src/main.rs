@@ -457,8 +457,14 @@ pub fn repl() {
                     Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
                 match parser().parse(tok_stream).into_result() {
                     Ok(ast) => match eval(env.clone(), &ast) {
-                        Ok(val) => println!("{}", val),
-                        Err(e) => println!("Error: {}", e),
+                        Ok(val) => {
+                            println!("ast: {:?}", ast);
+                            println!("{}", val);
+                        }
+                        Err(e) => {
+                            println!("ast: {:?}", ast);
+                            println!("Error: {}", e);
+                        }
                     },
                     Err(e) => {
                         println!("Error: {:?}", e);
