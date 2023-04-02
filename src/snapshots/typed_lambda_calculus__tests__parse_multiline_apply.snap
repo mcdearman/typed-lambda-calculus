@@ -1,0 +1,21 @@
+---
+source: src/tests.rs
+expression: ast
+---
+Let(
+    Ident(f),
+    Lambda(
+        Ident(x),
+        Var(
+            Ident(x),
+        ),
+    ),
+    Apply(
+        Var(
+            Ident(f),
+        ),
+        Int(
+            5,
+        ),
+    ),
+)
