@@ -1,0 +1,13 @@
+---
+source: src/tests.rs
+expression: ast
+---
+Let(
+    Ident(x),
+    Int(
+        5,
+    ),
+    Var(
+        Ident(x),
+    ),
+)
