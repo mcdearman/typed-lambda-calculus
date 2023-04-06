@@ -416,26 +416,26 @@ pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
 // =                             REPL                                  =
 // =====================================================================
 
-#[derive(Completer, Helper, Highlighter, Hinter, Validator)]
-struct ReplHelper {
-    #[rustyline(Validator)]
-    validator: MatchingBracketValidator,
-    #[rustyline(Highlighter)]
-    highlighter: MatchingBracketHighlighter,
-}
+// #[derive(Completer, Helper, Highlighter, Hinter, Validator)]
+// struct ReplHelper {
+//     #[rustyline(Validator)]
+//     validator: MatchingBracketValidator,
+//     #[rustyline(Highlighter)]
+//     highlighter: MatchingBracketHighlighter,
+// }
 
-impl ReplHelper {
-    fn new() -> Self {
-        Self {
-            validator: MatchingBracketValidator::new(),
-            highlighter: MatchingBracketHighlighter::new(),
-        }
-    }
-}
+// impl ReplHelper {
+//     fn new() -> Self {
+//         Self {
+//             validator: MatchingBracketValidator::new(),
+//             highlighter: MatchingBracketHighlighter::new(),
+//         }
+//     }
+// }
 
 pub fn repl() {
-    let mut rl = Editor::new().expect("failed to create editor");
-    rl.set_helper(Some(ReplHelper::new()));
+    // let mut rl = Editor::new().expect("failed to create editor");
+    // rl.set_helper(Some(ReplHelper::new()));
 
     println!("Welcome to the Lust REPL!");
     print!("> ");
@@ -463,7 +463,7 @@ pub fn repl() {
                         }
                         Err(e) => {
                             println!("ast: {:?}", ast);
-                            println!("Error: {}", e);
+                            eprintln!("Error: {}", e);
                         }
                     },
                     Err(e) => {
