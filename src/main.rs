@@ -236,7 +236,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 pub enum Type {
     Int,
     Bool,
-    Var(usize),
+    Var(Ident),
     Lambda(Box<Self>, Box<Self>),
 }
 
@@ -248,6 +248,19 @@ impl Display for Type {
             Self::Var(n) => write!(f, "t{}", n),
             Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
         }
+    }
+}
+
+type Substitution = HashMap<Ident, Type>;
+
+fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
+    match ty {
+        Type::Int | Type::Bool => ty.clone(),
+        Type::Var(n) => subst.get(n).cloned().unwrap_or_else(|| ty.clone()),
+        Type::Lambda(param, body) => Type::Lambda(
+            Box::new(apply_subst(subst, param)),
+            Box::new(apply_subst(subst, body)),
+        ),
     }
 }
 
