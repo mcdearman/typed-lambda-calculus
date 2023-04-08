@@ -236,7 +236,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 pub enum Type {
     Int,
     Bool,
-    Var(Ident),
+    Var(usize),
     Lambda(Box<Self>, Box<Self>),
 }
 
@@ -251,7 +251,12 @@ impl Display for Type {
     }
 }
 
-type Substitution = HashMap<Ident, Type>;
+type Substitution = HashMap<usize, Type>;
+
+struct Scheme {
+    pub ty: Type,
+    pub vars: Vec<usize>,
+}
 
 fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
     match ty {
@@ -261,6 +266,13 @@ fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
             Box::new(apply_subst(subst, param)),
             Box::new(apply_subst(subst, body)),
         ),
+    }
+}
+
+fn apply_subst_scheme(subst: &Substitution, scheme: &Scheme) -> Scheme {
+    Scheme {
+        ty: apply_subst(subst, &scheme.ty),
+        vars: scheme.vars.clone(),
     }
 }
 
