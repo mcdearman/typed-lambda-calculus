@@ -276,6 +276,14 @@ fn apply_subst_scheme(subst: &Substitution, scheme: &Scheme) -> Scheme {
     }
 }
 
+fn compose_subst(subst1: &Substitution, subst2: &Substitution) -> Substitution {
+    let mut subst = subst1.clone();
+    for (k, v) in subst2 {
+        subst.insert(*k, apply_subst(&subst, v));
+    }
+    subst
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypeEnv {
     bindings: HashMap<Ident, Type>,
