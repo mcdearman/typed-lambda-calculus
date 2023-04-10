@@ -253,9 +253,13 @@ impl Display for Type {
 
 type Substitution = HashMap<usize, Type>;
 
-struct Scheme {
-    pub ty: Type,
-    pub vars: Vec<usize>,
+enum Scheme {
+    Type(Type),
+    Vars(Vec<usize>),
+}
+
+struct Context {
+    vars: HashMap<Ident, Scheme>,
 }
 
 fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
@@ -270,61 +274,91 @@ fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
 }
 
 fn apply_subst_scheme(subst: &Substitution, scheme: &Scheme) -> Scheme {
-    Scheme {
-        ty: apply_subst(subst, &scheme.ty),
-        vars: scheme.vars.clone(),
+    match scheme {
+        Scheme::Type(t) => Scheme::Type(apply_subst(subst, t)),
+        Scheme::Vars(vars) => {
+            let mut new_subst = HashMap::new();
+            for (i, t) in subst.iter() {
+                if !vars.contains(i) {
+                    new_subst.insert(*i, t.clone());
+                }
+            }
+            Scheme::Vars(vars.clone())
+        }
     }
 }
 
 fn compose_subst(subst1: &Substitution, subst2: &Substitution) -> Substitution {
-    let mut subst = subst1.clone();
-    for (k, v) in subst2 {
-        subst.insert(*k, apply_subst(&subst, v));
-    }
-    subst
+    subst1
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .chain(
+            subst2
+                .iter()
+                .map(|(k, v)| (k.clone(), apply_subst(subst1, v))),
+        )
+        .collect()
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct TypeEnv {
-    bindings: HashMap<Ident, Type>,
-    counter: usize,
-}
-
-impl TypeEnv {
-    pub fn new() -> Self {
-        Self {
-            bindings: HashMap::new(),
-            counter: 0,
+fn free_vars(ty: &Type) -> Vec<usize> {
+    match ty {
+        Type::Int | Type::Bool => vec![],
+        Type::Var(n) => vec![*n],
+        Type::Lambda(param, body) => {
+            let mut vars = free_vars(param);
+            vars.extend(free_vars(body));
+            vars
         }
     }
+}
 
-    pub fn fresh(&mut self) -> Type {
-        let ty = Type::Var(self.counter);
-        self.counter += 1;
-        ty
-    }
-
-    pub fn bind(&mut self, name: Ident, ty: Type) {
-        self.bindings.insert(name, ty);
-    }
-
-    pub fn lookup(&self, name: &Ident) -> Option<Type> {
-        self.bindings.get(name).cloned()
+fn infer(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
+    match expr {
+        _ => todo!(),
     }
 }
 
-pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
-    match (t1, t2) {
-        (Type::Int, Type::Int) => Ok(Type::Int),
-        (Type::Bool, Type::Bool) => Ok(Type::Bool),
-        (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
-            let p = unify(p1, p2)?;
-            let b = unify(b1, b2)?;
-            Ok(Type::Lambda(Box::new(p), Box::new(b)))
-        }
-        _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
-    }
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct TypeEnv {
+//     bindings: HashMap<Ident, Type>,
+//     counter: usize,
+// }
+
+// impl TypeEnv {
+//     pub fn new() -> Self {
+//         Self {
+//             bindings: HashMap::new(),
+//             counter: 0,
+//         }
+//     }
+
+//     pub fn fresh(&mut self) -> Type {
+//         let ty = Type::Var(self.counter);
+//         self.counter += 1;
+//         ty
+//     }
+
+//     pub fn bind(&mut self, name: Ident, ty: Type) {
+//         self.bindings.insert(name, ty);
+//     }
+
+//     pub fn lookup(&self, name: &Ident) -> Option<Type> {
+//         self.bindings.get(name).cloned()
+//     }
+// }
+
+// pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
+//     match (t1, t2) {
+//         (Type::Int, Type::Int) => Ok(Type::Int),
+//         (Type::Bool, Type::Bool) => Ok(Type::Bool),
+//         (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
+//             let p = unify(p1, p2)?;
+//             let b = unify(b1, b2)?;
+//             Ok(Type::Lambda(Box::new(p), Box::new(b)))
+//         }
+//         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
+//     }
+// }
 
 // =====================================================================
 // =                             Eval                                  =
