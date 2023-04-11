@@ -253,9 +253,9 @@ impl Display for Type {
 
 type Substitution = HashMap<usize, Type>;
 
-enum Scheme {
-    Type(Type),
-    Vars(Vec<usize>),
+struct Scheme {
+    vars: Vec<usize>,
+    ty: Type,
 }
 
 struct Context {
@@ -274,17 +274,13 @@ fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
 }
 
 fn apply_subst_scheme(subst: &Substitution, scheme: &Scheme) -> Scheme {
-    match scheme {
-        Scheme::Type(t) => Scheme::Type(apply_subst(subst, t)),
-        Scheme::Vars(vars) => {
-            let mut new_subst = HashMap::new();
-            for (i, t) in subst.iter() {
-                if !vars.contains(i) {
-                    new_subst.insert(*i, t.clone());
-                }
-            }
-            Scheme::Vars(vars.clone())
-        }
+    let mut subst = subst.clone();
+    for var in &scheme.vars {
+        subst.remove(var);
+    }
+    Scheme {
+        vars: scheme.vars.clone(),
+        ty: apply_subst(&subst, &scheme.ty),
     }
 }
 
@@ -312,10 +308,28 @@ fn free_vars(ty: &Type) -> Vec<usize> {
     }
 }
 
-fn infer(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
+pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
+    match (t1, t2) {
+        (Type::Int, Type::Int) => Ok(Type::Int),
+        (Type::Bool, Type::Bool) => Ok(Type::Bool),
+        (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
+            let p = unify(p1, p2)?;
+            let b = unify(b1, b2)?;
+            Ok(Type::Lambda(Box::new(p), Box::new(b)))
+        }
+        _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
+    }
+}
+
+fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String> {
     match expr {
         _ => todo!(),
     }
+}
+
+fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
+    let (subst, ty) = infer(ctx, expr)?;
+    Ok(apply_subst(&subst, &ty))
 }
 
 // #[derive(Debug, Clone, PartialEq)]
@@ -344,19 +358,6 @@ fn infer(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
 
 //     pub fn lookup(&self, name: &Ident) -> Option<Type> {
 //         self.bindings.get(name).cloned()
-//     }
-// }
-
-// pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
-//     match (t1, t2) {
-//         (Type::Int, Type::Int) => Ok(Type::Int),
-//         (Type::Bool, Type::Bool) => Ok(Type::Bool),
-//         (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
-//             let p = unify(p1, p2)?;
-//             let b = unify(b1, b2)?;
-//             Ok(Type::Lambda(Box::new(p), Box::new(b)))
-//         }
-//         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
 //     }
 // }
 
