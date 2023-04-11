@@ -5,16 +5,11 @@ use lasso::Spur;
 use lasso::ThreadedRodeo;
 use logos::Logos;
 use once_cell::sync::Lazy;
-use rustyline::{
-    error::ReadlineError, highlight::MatchingBracketHighlighter,
-    validate::MatchingBracketValidator, Completer, Editor, Helper, Highlighter, Hinter, Validator,
-};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
-use std::fs;
-use std::fs::File;
 use std::io;
 use std::io::Write;
+use std::ops::Sub;
 use std::{cell::RefCell, rc::Rc};
 
 pub mod tests;
@@ -26,17 +21,17 @@ pub mod tests;
 pub static mut INTERNER: Lazy<ThreadedRodeo> = Lazy::new(|| ThreadedRodeo::default());
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-pub struct Ident {
+pub struct InternedString {
     pub key: Spur,
 }
 
-impl From<Spur> for Ident {
+impl From<Spur> for InternedString {
     fn from(key: Spur) -> Self {
         Self { key }
     }
 }
 
-impl From<&str> for Ident {
+impl From<&str> for InternedString {
     fn from(name: &str) -> Self {
         Self {
             key: unsafe { INTERNER.get_or_intern(name) },
@@ -44,13 +39,13 @@ impl From<&str> for Ident {
     }
 }
 
-impl Debug for Ident {
+impl Debug for InternedString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Ident({})", unsafe { INTERNER.resolve(&self.key) })
     }
 }
 
-impl Display for Ident {
+impl Display for InternedString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", unsafe { INTERNER.resolve(&self.key) })
     }
@@ -66,8 +61,8 @@ pub enum Token {
     Int(i64),
     #[regex(r"true|false", |lex| lex.slice().parse())]
     Bool(bool),
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| Ident::from(lex.slice()))]
-    Ident(Ident),
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| InternedString::from(lex.slice()))]
+    Ident(InternedString),
     #[token("\\")]
     Lambda,
     #[token("->")]
@@ -123,10 +118,10 @@ impl Display for Token {
 pub enum Expr {
     Int(i64),
     Bool(bool),
-    Var(Ident),
-    Lambda(Ident, Box<Self>),
+    Var(InternedString),
+    Lambda(InternedString, Box<Self>),
     Apply(Box<Self>, Box<Self>),
-    Let(Ident, Box<Self>, Box<Self>),
+    Let(InternedString, Box<Self>, Box<Self>),
     Add(Box<Self>, Box<Self>),
     Sub(Box<Self>, Box<Self>),
     Mul(Box<Self>, Box<Self>),
@@ -171,7 +166,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
                         .then_ignore(just(Token::In))
                         .then(expr.clone())
                         .map(|((name, val), body)| {
-                            Expr::Let(Ident::from(name), Box::new(val), Box::new(body))
+                            Expr::Let(InternedString::from(name), Box::new(val), Box::new(body))
                         });
 
                     // parse curry lambda
@@ -179,7 +174,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
                         ident
                             .repeated()
                             .foldr(just(Token::Arrow).ignore_then(expr.clone()), |arg, body| {
-                                Expr::Lambda(Ident::from(arg), Box::new(body))
+                                Expr::Lambda(InternedString::from(arg), Box::new(body))
                             }),
                     );
 
@@ -236,7 +231,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 pub enum Type {
     Int,
     Bool,
-    Var(usize),
+    Var(TyVar),
     Lambda(Box<Self>, Box<Self>),
 }
 
@@ -251,15 +246,26 @@ impl Display for Type {
     }
 }
 
-type Substitution = HashMap<usize, Type>;
+type Substitution = HashMap<TyVar, Type>;
 
 struct Scheme {
-    vars: Vec<usize>,
+    vars: Vec<TyVar>,
     ty: Type,
 }
 
 struct Context {
-    vars: HashMap<Ident, Scheme>,
+    vars: HashMap<InternedString, Scheme>,
+}
+
+type TyVar = usize;
+
+static mut COUNTER: usize = 0;
+
+fn fresh_var() -> Type {
+    unsafe {
+        COUNTER += 1;
+        Type::Var(COUNTER)
+    }
 }
 
 fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
@@ -296,7 +302,7 @@ fn compose_subst(subst1: &Substitution, subst2: &Substitution) -> Substitution {
         .collect()
 }
 
-fn free_vars(ty: &Type) -> Vec<usize> {
+fn free_vars(ty: &Type) -> Vec<TyVar> {
     match ty {
         Type::Int | Type::Bool => vec![],
         Type::Var(n) => vec![*n],
@@ -308,14 +314,23 @@ fn free_vars(ty: &Type) -> Vec<usize> {
     }
 }
 
-pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
+pub fn unify(t1: &Type, t2: &Type) -> Result<Substitution, String> {
     match (t1, t2) {
-        (Type::Int, Type::Int) => Ok(Type::Int),
-        (Type::Bool, Type::Bool) => Ok(Type::Bool),
+        (Type::Int, Type::Int) => Ok(HashMap::new()),
+        (Type::Bool, Type::Bool) => Ok(HashMap::new()),
         (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
-            let p = unify(p1, p2)?;
-            let b = unify(b1, b2)?;
-            Ok(Type::Lambda(Box::new(p), Box::new(b)))
+            let s1 = unify(p1, p2)?;
+            let s2 = unify(&apply_subst(&s1, &b1), &apply_subst(&s1, &b2))?;
+            Ok(compose_subst(&s2, &s1))
+        }
+        (Type::Var(n), _) => {
+            if free_vars(t2).contains(n) {
+                Err(format!("occurs check failed: {:?} occurs in {:?}", n, t2))
+            } else {
+                let mut subst = HashMap::new();
+                subst.insert(*n, t2.clone());
+                Ok(subst)
+            }
         }
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
     }
@@ -323,43 +338,40 @@ pub fn unify(t1: &Type, t2: &Type) -> Result<Type, String> {
 
 fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String> {
     match expr {
-        _ => todo!(),
+        Expr::Int(_) => Ok((HashMap::new(), Type::Int)),
+        Expr::Bool(_) => Ok((HashMap::new(), Type::Bool)),
+        Expr::Var(name) => match ctx.vars.get(name) {
+            Some(scheme) => {
+                let mut subst = HashMap::new();
+                for var in &scheme.vars {
+                    subst.insert(*var, Type::Var(subst.len()));
+                }
+                Ok((subst.clone(), apply_subst(&subst, &scheme.ty)))
+            }
+            None => Err(format!("unbound variable: {:?}", expr)),
+        },
+        Expr::Lambda(_, _) => todo!(),
+        Expr::Apply(_, _) => todo!(),
+        Expr::Let(_, _, _) => todo!(),
+        Expr::Add(_, _) => todo!(),
+        Expr::Sub(_, _) => todo!(),
+        Expr::Mul(_, _) => todo!(),
+        Expr::Div(_, _) => todo!(),
     }
+}
+
+fn instantiate(scheme: &Scheme) -> Type {
+    let mut subst = HashMap::new();
+    for var in &scheme.vars {
+        subst.insert(*var, Type::Var(subst.len()));
+    }
+    apply_subst(&subst, &scheme.ty)
 }
 
 fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
     let (subst, ty) = infer(ctx, expr)?;
     Ok(apply_subst(&subst, &ty))
 }
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct TypeEnv {
-//     bindings: HashMap<Ident, Type>,
-//     counter: usize,
-// }
-
-// impl TypeEnv {
-//     pub fn new() -> Self {
-//         Self {
-//             bindings: HashMap::new(),
-//             counter: 0,
-//         }
-//     }
-
-//     pub fn fresh(&mut self) -> Type {
-//         let ty = Type::Var(self.counter);
-//         self.counter += 1;
-//         ty
-//     }
-
-//     pub fn bind(&mut self, name: Ident, ty: Type) {
-//         self.bindings.insert(name, ty);
-//     }
-
-//     pub fn lookup(&self, name: &Ident) -> Option<Type> {
-//         self.bindings.get(name).cloned()
-//     }
-// }
 
 // =====================================================================
 // =                             Eval                                  =
@@ -368,7 +380,7 @@ fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Env {
     parent: Option<Rc<RefCell<Env>>>,
-    vars: HashMap<Ident, Expr>,
+    vars: HashMap<InternedString, Expr>,
 }
 
 impl Env {
@@ -386,11 +398,11 @@ impl Env {
         }
     }
 
-    pub fn define(&mut self, name: Ident, val: Expr) {
+    pub fn define(&mut self, name: InternedString, val: Expr) {
         self.vars.insert(name, val);
     }
 
-    pub fn lookup(&self, name: &Ident) -> Option<Expr> {
+    pub fn lookup(&self, name: &InternedString) -> Option<Expr> {
         if let Some(v) = self.vars.get(name) {
             Some(v.clone())
         } else if let Some(parent) = &self.parent {
@@ -405,7 +417,7 @@ impl Env {
 pub enum Value {
     Int(i64),
     Bool(bool),
-    Lambda(Ident, Box<Expr>, Rc<RefCell<Env>>),
+    Lambda(InternedString, Box<Expr>, Rc<RefCell<Env>>),
 }
 
 impl Display for Value {
