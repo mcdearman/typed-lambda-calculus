@@ -257,14 +257,23 @@ struct Context {
     vars: HashMap<InternedString, Scheme>,
 }
 
-type TyVar = usize;
-
 static mut COUNTER: usize = 0;
 
-fn fresh_var() -> Type {
-    unsafe {
-        COUNTER += 1;
-        Type::Var(COUNTER)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TyVar(pub usize);
+
+impl TyVar {
+    fn fresh() -> Self {
+        unsafe {
+            COUNTER += 1;
+            Self(COUNTER)
+        }
+    }
+}
+
+impl Display for TyVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "t{}", self)
     }
 }
 
@@ -314,6 +323,18 @@ fn free_vars(ty: &Type) -> Vec<TyVar> {
     }
 }
 
+fn var_bind(var: TyVar, ty: &Type) -> Result<Substitution, String> {
+    if ty == &Type::Var(var) {
+        Ok(HashMap::new())
+    } else if free_vars(ty).contains(&var) {
+        Err(format!("occurs check failed: t{} occurs in {:?}", var, ty))
+    } else {
+        let mut subst = HashMap::new();
+        subst.insert(var, ty.clone());
+        Ok(subst)
+    }
+}
+
 pub fn unify(t1: &Type, t2: &Type) -> Result<Substitution, String> {
     match (t1, t2) {
         (Type::Int, Type::Int) => Ok(HashMap::new()),
@@ -323,15 +344,7 @@ pub fn unify(t1: &Type, t2: &Type) -> Result<Substitution, String> {
             let s2 = unify(&apply_subst(&s1, &b1), &apply_subst(&s1, &b2))?;
             Ok(compose_subst(&s2, &s1))
         }
-        (Type::Var(n), _) => {
-            if free_vars(t2).contains(n) {
-                Err(format!("occurs check failed: {:?} occurs in {:?}", n, t2))
-            } else {
-                let mut subst = HashMap::new();
-                subst.insert(*n, t2.clone());
-                Ok(subst)
-            }
-        }
+        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(*n, t2),
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
     }
 }
@@ -342,11 +355,12 @@ fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String>
         Expr::Bool(_) => Ok((HashMap::new(), Type::Bool)),
         Expr::Var(name) => match ctx.vars.get(name) {
             Some(scheme) => {
-                let mut subst = HashMap::new();
-                for var in &scheme.vars {
-                    subst.insert(*var, Type::Var(subst.len()));
-                }
-                Ok((subst.clone(), apply_subst(&subst, &scheme.ty)))
+                // let mut subst = HashMap::new();
+                // for var in &scheme.vars {
+                //     subst.insert(*var, Type::Var(subst.len()));
+                // }
+                // Ok((subst.clone(), apply_subst(&subst, &scheme.ty)))
+                todo!()
             }
             None => Err(format!("unbound variable: {:?}", expr)),
         },
@@ -361,11 +375,12 @@ fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String>
 }
 
 fn instantiate(scheme: &Scheme) -> Type {
-    let mut subst = HashMap::new();
-    for var in &scheme.vars {
-        subst.insert(*var, Type::Var(subst.len()));
-    }
-    apply_subst(&subst, &scheme.ty)
+    // let mut subst = HashMap::new();
+    // for var in &scheme.vars {
+    //     subst.insert(*var, Type::Var(subst.len()));
+    // }
+    // apply_subst(&subst, &scheme.ty)
+    todo!()
 }
 
 fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
