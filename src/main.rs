@@ -250,13 +250,15 @@ impl Display for Type {
 
 type Substitution = HashMap<TyVar, Type>;
 
+#[derive(Debug, Clone, PartialEq)]
 struct Scheme {
     vars: Vec<TyVar>,
     ty: Type,
 }
-
-struct Context {
-    vars: HashMap<InternedString, Scheme>,
+impl Scheme {
+    fn new(vars: Vec<TyVar>, ty: Type) -> Self {
+        Self { vars, ty }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -314,7 +316,10 @@ fn compose_subst(s1: Substitution, s2: Substitution) -> Substitution {
 fn free_vars(ty: Type) -> BTreeSet<TyVar> {
     match ty {
         Type::Var(n) => vec![n.clone()].into_iter().collect(),
-        Type::Lambda(param, body) => free_vars(*param.clone()).union(&free_vars(*body.clone())).cloned().collect(),
+        Type::Lambda(param, body) => free_vars(*param.clone())
+            .union(&free_vars(*body.clone()))
+            .cloned()
+            .collect(),
         _ => BTreeSet::new(),
     }
 }
@@ -355,24 +360,98 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
     }
 }
 
-fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String> {
-    match expr {
+#[derive(Debug, Clone, PartialEq)]
+struct Context {
+    vars: HashMap<InternedString, Scheme>,
+}
+
+fn apply_subst_ctx(subst: Substitution, ctx: Context) -> Context {
+    Context {
+        vars: ctx
+            .vars
+            .into_iter()
+            .map(|(name, scheme)| (name, apply_subst_scheme(subst.clone(), scheme)))
+            .collect(),
+    }
+}
+
+fn free_vars_ctx(ctx: Context) -> BTreeSet<TyVar> {
+    ctx.vars
+        .into_iter()
+        .map(|(_, scheme)| free_vars_scheme(scheme))
+        .fold(BTreeSet::new(), |acc, set| {
+            acc.union(&set).cloned().collect()
+        })
+}
+
+fn generalize(ctx: Context, ty: Type) -> Scheme {
+    Scheme {
+        vars: free_vars(ty.clone())
+            .difference(&free_vars_ctx(ctx))
+            .cloned()
+            .collect(),
+        ty,
+    }
+}
+
+fn instantiate(scheme: Scheme) -> Type {
+    let mut subst = HashMap::new();
+    for var in &scheme.vars {
+        subst.insert(*var, Type::Var(TyVar::fresh()));
+    }
+    apply_subst(subst, scheme.ty)
+}
+
+fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
+    match expr.clone() {
         Expr::Int(_) => Ok((HashMap::new(), Type::Int)),
         Expr::Bool(_) => Ok((HashMap::new(), Type::Bool)),
-        Expr::Var(name) => match ctx.vars.get(name) {
-            Some(scheme) => {
-                // let mut subst = HashMap::new();
-                // for var in &scheme.vars {
-                //     subst.insert(*var, Type::Var(subst.len()));
-                // }
-                // Ok((subst.clone(), apply_subst(&subst, &scheme.ty)))
-                todo!()
-            }
+        Expr::Var(name) => match ctx.vars.get(&name) {
+            Some(scheme) => Ok((HashMap::new(), instantiate(scheme.clone()))),
             None => Err(format!("unbound variable: {:?}", expr)),
         },
-        Expr::Lambda(_, _) => todo!(),
-        Expr::Apply(_, _) => todo!(),
-        Expr::Let(_, _, _) => todo!(),
+        Expr::Lambda(name, body) => {
+            let ty_binder = Type::Var(TyVar::fresh());
+            let tmp_ctx = Context {
+                vars: ctx
+                    .vars
+                    .into_iter()
+                    .chain(vec![(name, Scheme::new(vec![], ty_binder.clone()))].into_iter())
+                    .collect(),
+            };
+            let (s1, t1) = infer(tmp_ctx, *body.clone())?;
+            Ok((
+                s1.clone(),
+                Type::Lambda(Box::new(apply_subst(s1.clone(), ty_binder)), Box::new(t1)),
+            ))
+        }
+        Expr::Apply(fun, arg) => {
+            let (s1, t1) = infer(ctx.clone(), *fun.clone())?;
+            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *arg.clone())?;
+            let t3 = Type::Var(TyVar::fresh());
+            let s3 = unify(
+                apply_subst(s2.clone(), t1),
+                Type::Lambda(Box::new(t2), Box::new(t3.clone())),
+            )?;
+            Ok((
+                compose_subst(compose_subst(s3.clone(), s2.clone()), s1.clone()),
+                apply_subst(s3, t3.clone()),
+            ))
+        }
+        Expr::Let(name, binding, body) => {
+            let (s1, t1) = infer(ctx.clone(), *binding.clone())?;
+            let scheme = generalize(apply_subst_ctx(s1.clone(), ctx.clone()), t1.clone());
+            let tmp_ctx = Context {
+                vars: ctx
+                    .vars
+                    .clone()
+                    .into_iter()
+                    .chain(vec![(name.clone(), scheme)].into_iter())
+                    .collect(),
+            };
+            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), tmp_ctx), *body.clone())?;
+            Ok((compose_subst(s2.clone(), s1.clone()), t2.clone()))
+        }
         Expr::Add(_, _) => todo!(),
         Expr::Sub(_, _) => todo!(),
         Expr::Mul(_, _) => todo!(),
@@ -380,24 +459,31 @@ fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String>
     }
 }
 
-fn instantiate(scheme: Scheme) -> Type {
-    // let mut subst = HashMap::new();
-    // for var in &scheme.vars {
-    //     subst.insert(*var, Type::Var(subst.len()));
-    // }
-    // apply_subst(&subst, &scheme.ty)
-    todo!()
-}
-
-fn generalize(ctx: Context, ty: Type) -> Scheme {
-    let mut vars = free_vars(ty.clone());
-    vars.retain(|v| ctx.vars.values().any(|s| s.vars.contains(v)));
-    Scheme { vars, ty }
-}
-
-fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
+fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
     let (subst, ty) = infer(ctx, expr)?;
     Ok(apply_subst(subst, ty))
+}
+
+// fn type_check(expr: Expr) -> Result<Expr, String> {
+
+//     type_inference(ctx, expr)
+// }
+
+fn default_ctx() -> Context {
+    let mut ctx = Context {
+        vars: HashMap::new(),
+    };
+    ctx.vars.insert(
+        InternedString::from("id"),
+        Scheme::new(
+            vec![TyVar::fresh()],
+            Type::Lambda(
+                Box::new(Type::Var(TyVar::fresh())),
+                Box::new(Type::Var(TyVar::fresh())),
+            ),
+        ),
+    );
+    ctx
 }
 
 // =====================================================================
