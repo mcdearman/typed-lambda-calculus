@@ -9,7 +9,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::io;
 use std::io::Write;
-use std::ops::Sub;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::{cell::RefCell, rc::Rc};
 
 pub mod tests;
@@ -257,17 +258,14 @@ struct Context {
     vars: HashMap<InternedString, Scheme>,
 }
 
-static mut COUNTER: usize = 0;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TyVar(pub usize);
 
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 impl TyVar {
     fn fresh() -> Self {
-        unsafe {
-            COUNTER += 1;
-            Self(COUNTER)
-        }
+        Self(COUNTER.fetch_add(1, Ordering::SeqCst))
     }
 }
 
@@ -321,6 +319,12 @@ fn free_vars(ty: &Type) -> Vec<TyVar> {
             vars
         }
     }
+}
+
+fn free_vars_scheme(scheme: &Scheme) -> Vec<TyVar> {
+    let mut vars = free_vars(&scheme.ty);
+    vars.retain(|v| !scheme.vars.contains(v));
+    vars
 }
 
 fn var_bind(var: TyVar, ty: &Type) -> Result<Substitution, String> {
