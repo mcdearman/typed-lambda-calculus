@@ -1,0 +1,12 @@
+---
+source: src/tests.rs
+expression: ty
+---
+Lambda(
+    Var(
+        TyVar(t3),
+    ),
+    Var(
+        TyVar(t3),
+    ),
+)
