@@ -5,6 +5,7 @@ use lasso::Spur;
 use lasso::ThreadedRodeo;
 use logos::Logos;
 use once_cell::sync::Lazy;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use std::io;
@@ -258,7 +259,7 @@ struct Context {
     vars: HashMap<InternedString, Scheme>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TyVar(pub usize);
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -310,22 +311,19 @@ fn compose_subst(s1: Substitution, s2: Substitution) -> Substitution {
     )
 }
 
-fn free_vars(ty: Type) -> Vec<TyVar> {
+fn free_vars(ty: Type) -> BTreeSet<TyVar> {
     match ty {
-        Type::Int | Type::Bool => vec![],
-        Type::Var(n) => vec![n.clone()],
-        Type::Lambda(param, body) => {
-            let mut vars = free_vars(*param.clone());
-            vars.extend(free_vars(*body.clone()));
-            vars
-        }
+        Type::Var(n) => vec![n.clone()].into_iter().collect(),
+        Type::Lambda(param, body) => free_vars(*param.clone()).union(&free_vars(*body.clone())).cloned().collect(),
+        _ => BTreeSet::new(),
     }
 }
 
-fn free_vars_scheme(scheme: Scheme) -> Vec<TyVar> {
-    let mut vars = free_vars(scheme.ty.clone());
-    vars.retain(|v| !scheme.vars.contains(v));
-    vars
+fn free_vars_scheme(scheme: Scheme) -> BTreeSet<TyVar> {
+    free_vars(scheme.ty.clone())
+        .difference(&scheme.vars.iter().cloned().collect())
+        .cloned()
+        .collect()
 }
 
 fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
