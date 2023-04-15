@@ -275,62 +275,63 @@ impl Display for TyVar {
     }
 }
 
-fn apply_subst(subst: &Substitution, ty: &Type) -> Type {
+fn apply_subst(subst: Substitution, ty: Type) -> Type {
     match ty {
         Type::Int | Type::Bool => ty.clone(),
-        Type::Var(n) => subst.get(n).cloned().unwrap_or_else(|| ty.clone()),
+        Type::Var(n) => subst.get(&n).cloned().unwrap_or_else(|| ty.clone()),
         Type::Lambda(param, body) => Type::Lambda(
-            Box::new(apply_subst(subst, param)),
-            Box::new(apply_subst(subst, body)),
+            Box::new(apply_subst(subst.clone(), *param)),
+            Box::new(apply_subst(subst.clone(), *body)),
         ),
     }
 }
 
-fn apply_subst_scheme(subst: &Substitution, scheme: &Scheme) -> Scheme {
-    let mut subst = subst.clone();
+fn apply_subst_scheme(mut subst: Substitution, scheme: Scheme) -> Scheme {
     for var in &scheme.vars {
         subst.remove(var);
     }
     Scheme {
         vars: scheme.vars.clone(),
-        ty: apply_subst(&subst, &scheme.ty),
+        ty: apply_subst(subst.clone(), scheme.ty.clone()),
     }
 }
 
-fn compose_subst(subst1: &Substitution, subst2: &Substitution) -> Substitution {
-    subst1
-        .iter()
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .chain(
-            subst2
-                .iter()
-                .map(|(k, v)| (k.clone(), apply_subst(subst1, v))),
-        )
-        .collect()
+// left-biased union
+fn map_union(m1: Substitution, m2: Substitution) -> Substitution {
+    m2.into_iter().chain(m1.into_iter()).collect()
 }
 
-fn free_vars(ty: &Type) -> Vec<TyVar> {
+fn compose_subst(s1: Substitution, s2: Substitution) -> Substitution {
+    map_union(
+        s2.iter()
+            .map(|(var, ty)| (var.clone(), apply_subst(s1.clone(), ty.clone())))
+            .collect(),
+        s1,
+    )
+}
+
+fn free_vars(ty: Type) -> Vec<TyVar> {
     match ty {
         Type::Int | Type::Bool => vec![],
-        Type::Var(n) => vec![*n],
+        Type::Var(n) => vec![n.clone()],
         Type::Lambda(param, body) => {
-            let mut vars = free_vars(param);
-            vars.extend(free_vars(body));
+            let mut vars = free_vars(*param.clone());
+            vars.extend(free_vars(*body.clone()));
             vars
         }
     }
 }
 
-fn free_vars_scheme(scheme: &Scheme) -> Vec<TyVar> {
-    let mut vars = free_vars(&scheme.ty);
+fn free_vars_scheme(scheme: Scheme) -> Vec<TyVar> {
+    let mut vars = free_vars(scheme.ty.clone());
     vars.retain(|v| !scheme.vars.contains(v));
     vars
 }
 
-fn var_bind(var: TyVar, ty: &Type) -> Result<Substitution, String> {
-    if ty == &Type::Var(var) {
+fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
+    if ty.clone() == Type::Var(var) {
         Ok(HashMap::new())
-    } else if free_vars(ty).contains(&var) {
+    } else if free_vars(ty.clone()).contains(&var) {
         Err(format!("occurs check failed: t{} occurs in {:?}", var, ty))
     } else {
         let mut subst = HashMap::new();
@@ -339,16 +340,19 @@ fn var_bind(var: TyVar, ty: &Type) -> Result<Substitution, String> {
     }
 }
 
-pub fn unify(t1: &Type, t2: &Type) -> Result<Substitution, String> {
-    match (t1, t2) {
+pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
+    match (t1.clone(), t2.clone()) {
         (Type::Int, Type::Int) => Ok(HashMap::new()),
         (Type::Bool, Type::Bool) => Ok(HashMap::new()),
         (Type::Lambda(p1, b1), Type::Lambda(p2, b2)) => {
-            let s1 = unify(p1, p2)?;
-            let s2 = unify(&apply_subst(&s1, &b1), &apply_subst(&s1, &b2))?;
-            Ok(compose_subst(&s2, &s1))
+            let s1 = unify(*p1.clone(), *p2.clone())?;
+            let s2 = unify(
+                apply_subst(s1.clone(), *b1.clone()),
+                apply_subst(s1.clone(), *b2.clone()),
+            )?;
+            Ok(compose_subst(s2.clone(), s1.clone()))
         }
-        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(*n, t2),
+        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(n.clone(), t2),
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
     }
 }
@@ -378,7 +382,7 @@ fn infer(ctx: &mut Context, expr: &Expr) -> Result<(Substitution, Type), String>
     }
 }
 
-fn instantiate(scheme: &Scheme) -> Type {
+fn instantiate(scheme: Scheme) -> Type {
     // let mut subst = HashMap::new();
     // for var in &scheme.vars {
     //     subst.insert(*var, Type::Var(subst.len()));
@@ -387,9 +391,15 @@ fn instantiate(scheme: &Scheme) -> Type {
     todo!()
 }
 
+fn generalize(ctx: Context, ty: Type) -> Scheme {
+    let mut vars = free_vars(ty.clone());
+    vars.retain(|v| ctx.vars.values().any(|s| s.vars.contains(v)));
+    Scheme { vars, ty }
+}
+
 fn type_inference(ctx: &mut Context, expr: &Expr) -> Result<Type, String> {
     let (subst, ty) = infer(ctx, expr)?;
-    Ok(apply_subst(&subst, &ty))
+    Ok(apply_subst(subst, ty))
 }
 
 // =====================================================================
