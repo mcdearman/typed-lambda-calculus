@@ -226,7 +226,7 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 }
 
 // =====================================================================
-// =                             Types                                 =
+// =                              Types                                =
 // =====================================================================
 
 #[derive(Debug, Clone, PartialEq)]
