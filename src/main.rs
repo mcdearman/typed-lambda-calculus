@@ -229,12 +229,23 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 // =                              Types                                =
 // =====================================================================
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Type {
     Int,
     Bool,
     Var(TyVar),
     Lambda(Box<Self>, Box<Self>),
+}
+
+impl Debug for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Int => write!(f, "Int"),
+            Self::Bool => write!(f, "Bool"),
+            Self::Var(n) => write!(f, "t{}", n),
+            Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
+        }
+    }
 }
 
 impl Display for Type {
@@ -440,7 +451,7 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
                 Type::Lambda(Box::new(t2), Box::new(t3.clone())),
             )?;
             Ok((
-                compose_subst(compose_subst(s3.clone(), s2.clone()), s1.clone()),
+                compose_subst(s3.clone(), s2.clone()),
                 apply_subst(s3, t3.clone()),
             ))
         }
@@ -502,14 +513,14 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
 }
 
 fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
+    println!("type_inference: {:?}", expr);
     let (subst, ty) = infer(ctx, expr)?;
     Ok(apply_subst(subst, ty))
 }
 
-// fn type_check(expr: Expr) -> Result<Expr, String> {
-
-//     type_inference(ctx, expr)
-// }
+fn type_check(expr: Expr) -> Result<Expr, String> {
+    type_inference(default_ctx(), expr.clone()).map(|_| expr.clone())
+}
 
 fn default_ctx() -> Context {
     let mut ctx = Context {
@@ -586,6 +597,7 @@ impl Display for Value {
 }
 
 pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
+    type_check(expr.clone()).map_err(|e| format!("Type error: {}", e))?;
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
         Expr::Bool(b) => Ok(Value::Bool(*b)),

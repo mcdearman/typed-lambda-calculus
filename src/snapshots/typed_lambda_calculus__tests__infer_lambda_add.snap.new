@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 144
+assertion_line: 129
 expression: ty
 ---
-t17
+Int -> Int
