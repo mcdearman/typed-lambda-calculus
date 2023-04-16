@@ -129,6 +129,20 @@ fn test_infer_lambda_add() {
     insta::assert_debug_snapshot!(ty);
 }
 
+#[test]
+fn test_infer_lambda_add_apply() {
+    let src = "(\\x -> x + 1) 5";
+    let lex = Token::lexer(&src)
+        .spanned()
+        .map(|(tok, span)| (tok, SimpleSpan::from(span)));
+    let tok_stream = Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
+    let ast = parser()
+        .parse(tok_stream)
+        .into_result()
+        .expect("failed to parse");
+    let ty = type_inference(default_ctx(), ast).expect("failed to infer");
+    insta::assert_debug_snapshot!(ty);
+}
 // #[test]
 // fn test_infer_identity() {
 //     let src = "\\x -> x";

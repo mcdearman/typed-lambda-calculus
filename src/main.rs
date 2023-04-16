@@ -280,7 +280,7 @@ impl Debug for TyVar {
 
 impl Display for TyVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "t{}", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -467,10 +467,37 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
                 compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone()),
                 Type::Int,
             ))
-        },
-        Expr::Sub(l, r) => todo!(),
-        Expr::Mul(l, r) => todo!(),
-        Expr::Div(l, r) => todo!(),
+        }
+        Expr::Sub(l, r) => {
+            let (s1, t1) = infer(ctx.clone(), *l.clone())?;
+            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *r.clone())?;
+            let s3 = unify(t1, Type::Int)?;
+            let s4 = unify(t2, Type::Int)?;
+            Ok((
+                compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone()),
+                Type::Int,
+            ))
+        }
+        Expr::Mul(l, r) => {
+            let (s1, t1) = infer(ctx.clone(), *l.clone())?;
+            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *r.clone())?;
+            let s3 = unify(t1, Type::Int)?;
+            let s4 = unify(t2, Type::Int)?;
+            Ok((
+                compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone()),
+                Type::Int,
+            ))
+        }
+        Expr::Div(l, r) => {
+            let (s1, t1) = infer(ctx.clone(), *l.clone())?;
+            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *r.clone())?;
+            let s3 = unify(t1, Type::Int)?;
+            let s4 = unify(t2, Type::Int)?;
+            Ok((
+                compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone()),
+                Type::Int,
+            ))
+        }
     }
 }
 
