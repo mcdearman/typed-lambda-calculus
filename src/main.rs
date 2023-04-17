@@ -366,7 +366,7 @@ fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
     if ty.clone() == Type::Var(var) {
         Ok(HashMap::new())
     } else if free_vars(ty.clone()).contains(&var) {
-        Err(format!("occurs check failed: t{} occurs in {:?}", var, ty))
+        Err(format!("occurs check failed: {} occurs in {:?}", var, ty))
     } else {
         let mut subst = HashMap::new();
         subst.insert(var, ty.clone());
@@ -384,7 +384,7 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
                 apply_subst(s1.clone(), *b1.clone()),
                 apply_subst(s1.clone(), *b2.clone()),
             )?;
-            Ok(compose_subst(s2.clone(), s1.clone()))
+            Ok(compose_subst(s1.clone(), s2.clone()))
         }
         (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(n.clone(), t2),
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
