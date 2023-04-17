@@ -3,4 +3,4 @@ source: src/tests.rs
 assertion_line: 144
 expression: ty
 ---
-t17
+TyVar(17)

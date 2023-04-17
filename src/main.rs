@@ -237,13 +237,27 @@ pub enum Type {
     Lambda(Box<Self>, Box<Self>),
 }
 
+impl Type {
+    fn lower(&self) -> Self {
+        match self {
+            Self::Int => Self::Int,
+            Self::Bool => Self::Bool,
+            //
+            Self::Var(n) => Self::Var(*n),
+            Self::Lambda(param, body) => {
+                Self::Lambda(Box::new(param.lower()), Box::new(body.lower()))
+            }
+        }
+    }
+}
+
 impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
-            Self::Var(n) => write!(f, "t{}", n),
-            Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
+            Self::Var(n) => write!(f, "{:?}", n),
+            Self::Lambda(param, body) => write!(f, "{:?} -> {:?}", param, body),
         }
     }
 }
@@ -443,21 +457,25 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             ))
         }
         Expr::Apply(fun, arg) => {
-            let (s1, t1) = infer(ctx.clone(), *fun.clone())?;
-            let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *arg.clone())?;
-            let t3 = Type::Var(TyVar::fresh());
-            let s3 = unify(
-                apply_subst(s2.clone(), t1),
-                Type::Lambda(Box::new(t2), Box::new(t3.clone())),
+            let (s_fun, ty_fun) = infer(ctx.clone(), *fun.clone())?;
+            let (s_arg, ty_arg) = infer(apply_subst_ctx(s_fun.clone(), ctx.clone()), *arg.clone())?;
+            let ty_ret = Type::Var(TyVar::fresh());
+            let s_ret = unify(
+                apply_subst(s_arg.clone(), ty_fun),
+                Type::Lambda(Box::new(ty_arg), Box::new(ty_ret.clone())),
             )?;
             Ok((
-                compose_subst(s3.clone(), s2.clone()),
-                apply_subst(s3, t3.clone()),
+                compose_subst(s_ret.clone(), compose_subst(s_arg.clone(), s_fun.clone())),
+                apply_subst(s_ret, ty_ret.clone()),
             ))
         }
         Expr::Let(name, binding, body) => {
             let (s1, t1) = infer(ctx.clone(), *binding.clone())?;
             let scheme = generalize(apply_subst_ctx(s1.clone(), ctx.clone()), t1.clone());
+            // let scheme = Scheme {
+            //     vars: vec![],
+            //     ty: apply_subst(s1.clone(), t1.clone()),
+            // };
             let tmp_ctx = Context {
                 vars: ctx
                     .vars
