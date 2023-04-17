@@ -1,6 +1,6 @@
 ---
 source: src/tests.rs
-assertion_line: 144
+assertion_line: 159
 expression: ty
 ---
-TyVar(17)
+TyVar('a)

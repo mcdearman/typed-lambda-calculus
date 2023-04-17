@@ -2,7 +2,4 @@
 source: src/tests.rs
 expression: ty
 ---
-Lambda(
-    Int,
-    Int,
-)
+Int -> Int

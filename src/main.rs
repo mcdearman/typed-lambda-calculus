@@ -239,11 +239,19 @@ pub enum Type {
 
 impl Type {
     fn lower(&self) -> Self {
+        let mut vars = HashMap::new();
         match self {
             Self::Int => Self::Int,
             Self::Bool => Self::Bool,
-            //
-            Self::Var(n) => Self::Var(*n),
+            Self::Var(name) => {
+                if let Some(n) = vars.get(name) {
+                    Self::Var(*n)
+                } else {
+                    let n = vars.len();
+                    vars.insert(name, TyVar(n));
+                    Self::Var(TyVar(n))
+                }
+            }
             Self::Lambda(param, body) => {
                 Self::Lambda(Box::new(param.lower()), Box::new(body.lower()))
             }
@@ -303,9 +311,18 @@ impl Debug for TyVar {
     }
 }
 
+const ALPHABET: &[char] = &[
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z',
+];
+
 impl Display for TyVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        if self.0 < ALPHABET.len() {
+            write!(f, "'{}", ALPHABET[self.0])
+        } else {
+            write!(f, "t{}", self.0)
+        }
     }
 }
 
@@ -533,7 +550,7 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
 fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
     println!("type_inference: {:?}", expr);
     let (subst, ty) = infer(ctx, expr)?;
-    Ok(apply_subst(subst, ty))
+    Ok(apply_subst(subst, ty).lower())
 }
 
 fn type_check(expr: Expr) -> Result<Expr, String> {
