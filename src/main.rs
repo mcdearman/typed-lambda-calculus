@@ -605,6 +605,19 @@ fn default_ctx() -> Context {
             ),
         ),
     );
+    ctx.vars.insert(
+        InternedString::from("const"),
+        Scheme::new(
+            vec![TyVar::fresh(), TyVar::fresh()],
+            Type::Lambda(
+                Box::new(Type::Var(TyVar::fresh())),
+                Box::new(Type::Lambda(
+                    Box::new(Type::Var(TyVar::fresh())),
+                    Box::new(Type::Var(TyVar::fresh())),
+                )),
+            ),
+        ),
+    );
     ctx
 }
 
@@ -646,6 +659,22 @@ impl Env {
             None
         }
     }
+}
+
+fn default_env() -> Env {
+    let mut env = Env::new();
+    env.define(
+        InternedString::from("id"),
+        Expr::Lambda("x".into(), Box::new(Expr::Var("x".into()))),
+    );
+    env.define(
+        InternedString::from("const"),
+        Expr::Lambda(
+            "x".into(),
+            Box::new(Expr::Lambda("y".into(), Box::new(Expr::Var("x".into())))),
+        ),
+    );
+    env
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -739,7 +768,7 @@ pub fn repl() {
     io::stdout().flush().expect("failed to flush stdout");
     let mut src = String::new();
     let mut carry = String::new();
-    let env = Rc::new(RefCell::new(Env::new()));
+    let env = Rc::new(RefCell::new(default_env()));
     'outer: loop {
         std::io::stdin()
             .read_line(&mut src)
