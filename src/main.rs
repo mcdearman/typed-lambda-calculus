@@ -406,7 +406,7 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
             println!("unify s2: {:?}", s2);
             Ok(compose_subst(s1.clone(), s2.clone()))
         }
-        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(n.clone(), t2.clone()),
+        (Type::Var(n), t) | (t, Type::Var(n)) => var_bind(n.clone(), t.clone()),
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
     }
 }
