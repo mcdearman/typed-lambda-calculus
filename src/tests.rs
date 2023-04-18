@@ -145,7 +145,22 @@ fn test_infer_lambda_add() {
 }
 
 #[test]
-fn test_infer_lambda_add_apply() {
+fn test_infer_lambda_add_vars() {
+    let src = "\\x y -> x + y";
+    let lex = Token::lexer(&src)
+        .spanned()
+        .map(|(tok, span)| (tok, SimpleSpan::from(span)));
+    let tok_stream = Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
+    let ast = parser()
+        .parse(tok_stream)
+        .into_result()
+        .expect("failed to parse");
+    let ty = type_inference(default_ctx(), ast).expect("failed to infer");
+    insta::assert_debug_snapshot!(ty);
+}
+
+#[test]
+fn test_infer_apply_lambda_add() {
     let src = "(\\x -> x + 1) 5";
     let lex = Token::lexer(&src)
         .spanned()
@@ -158,23 +173,9 @@ fn test_infer_lambda_add_apply() {
     let ty = type_inference(default_ctx(), ast).expect("failed to infer");
     insta::assert_debug_snapshot!(ty);
 }
-// #[test]
-// fn test_infer_identity() {
-//     let src = "\\x -> x";
-//     let lex = Token::lexer(&src)
-//         .spanned()
-//         .map(|(tok, span)| (tok, SimpleSpan::from(span)));
-//     let tok_stream = Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
-//     let ast = parser()
-//         .parse(tok_stream)
-//         .into_result()
-//         .expect("failed to parse");
-//     let ty = type_inference(default_ctx(), ast).expect("failed to infer");
-//     insta::assert_debug_snapshot!(ty);
-// }
 
 // #[test]
-// fn test_infer_lambda() {
+// fn test_infer_lambda_apply() {
 //     let src = "\\f x -> f x";
 //     let lex = Token::lexer(&src)
 //         .spanned()

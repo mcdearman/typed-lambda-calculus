@@ -17,7 +17,7 @@ use std::{cell::RefCell, rc::Rc};
 pub mod tests;
 
 // =====================================================================
-// =                           Interner                                =
+// =                            Utilities                              =
 // =====================================================================
 
 pub static mut INTERNER: Lazy<ThreadedRodeo> = Lazy::new(|| ThreadedRodeo::default());
@@ -261,7 +261,7 @@ impl Type {
 
 impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match self.clone().lower() {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
             Self::Var(n) => write!(f, "{:?}", n),
@@ -272,10 +272,10 @@ impl Debug for Type {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
+        match self.clone().lower() {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
-            Self::Var(n) => write!(f, "t{}", n),
+            Self::Var(n) => write!(f, "{}", n),
             Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
         }
     }
@@ -380,7 +380,8 @@ fn free_vars_scheme(scheme: Scheme) -> BTreeSet<TyVar> {
 }
 
 fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
-    if ty.clone() == Type::Var(var) {
+    if ty.clone() == Type::Var(var.clone()) {
+        println!("{} == {:?}", var, ty);
         Ok(HashMap::new())
     } else if free_vars(ty.clone()).contains(&var) {
         Err(format!("occurs check failed: {} occurs in {:?}", var, ty))
@@ -401,9 +402,11 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
                 apply_subst(s1.clone(), *b1.clone()),
                 apply_subst(s1.clone(), *b2.clone()),
             )?;
+            println!("unify s1: {:?}", s1);
+            println!("unify s2: {:?}", s2);
             Ok(compose_subst(s1.clone(), s2.clone()))
         }
-        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(n.clone(), t2),
+        (Type::Var(n), _) | (_, Type::Var(n)) => var_bind(n.clone(), t2.clone()),
         _ => Err(format!("cannot unify {:?} and {:?}", t1, t2)),
     }
 }
@@ -470,29 +473,38 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             let (s1, t1) = infer(tmp_ctx, *body.clone())?;
             Ok((
                 s1.clone(),
-                Type::Lambda(Box::new(apply_subst(s1.clone(), ty_binder)), Box::new(t1)),
+                Type::Lambda(
+                    Box::new(apply_subst(s1.clone(), ty_binder.clone())),
+                    Box::new(t1),
+                ),
             ))
         }
         Expr::Apply(fun, arg) => {
-            let (s_fun, ty_fun) = infer(ctx.clone(), *fun.clone())?;
-            let (s_arg, ty_arg) = infer(apply_subst_ctx(s_fun.clone(), ctx.clone()), *arg.clone())?;
             let ty_ret = Type::Var(TyVar::fresh());
-            let s_ret = unify(
-                apply_subst(s_arg.clone(), ty_fun),
-                Type::Lambda(Box::new(ty_arg), Box::new(ty_ret.clone())),
+            let (s1, ty_fun) = infer(ctx.clone(), *fun.clone())?;
+            let (s2, ty_arg) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *arg.clone())?;
+            let s3 = unify(
+                apply_subst(s2.clone(), ty_fun.clone()),
+                Type::Lambda(Box::new(ty_arg.clone()), Box::new(ty_ret.clone())),
             )?;
-            Ok((
-                compose_subst(s_ret.clone(), compose_subst(s_arg.clone(), s_fun.clone())),
-                apply_subst(s_ret, ty_ret.clone()),
-            ))
+            let sf = compose_subst(s3.clone(), compose_subst(s2.clone(), s1.clone()));
+            println!("ty_fun: {:?}", ty_fun.clone());
+            println!("ty_arg: {:?}", ty_arg.clone());
+            // println!("ctx: {:?}", ctx.clone());
+            println!("s1: {:?}", s1);
+            println!("s2: {:?}", s2);
+            println!("s3: {:?}", s3);
+            println!("sf: {:?}", sf);
+            println!("ty_ret: {:?}", ty_ret.clone());
+            Ok((sf, apply_subst(s3, ty_ret.clone())))
         }
         Expr::Let(name, binding, body) => {
             let (s1, t1) = infer(ctx.clone(), *binding.clone())?;
-            let scheme = generalize(apply_subst_ctx(s1.clone(), ctx.clone()), t1.clone());
-            // let scheme = Scheme {
-            //     vars: vec![],
-            //     ty: apply_subst(s1.clone(), t1.clone()),
-            // };
+            // let scheme = generalize(apply_subst_ctx(s1.clone(), ctx.clone()), t1.clone());
+            let scheme = Scheme {
+                vars: vec![],
+                ty: apply_subst(s1.clone(), t1.clone()),
+            };
             let tmp_ctx = Context {
                 vars: ctx
                     .vars
@@ -509,10 +521,13 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             let (s2, t2) = infer(apply_subst_ctx(s1.clone(), ctx.clone()), *r.clone())?;
             let s3 = unify(t1, Type::Int)?;
             let s4 = unify(t2, Type::Int)?;
-            Ok((
-                compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone()),
-                Type::Int,
-            ))
+            let sf = compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone());
+            println!("add s1: {:?}", s1);
+            println!("add s2: {:?}", s2);
+            println!("add s3: {:?}", s3);
+            println!("add s4: {:?}", s4);
+            println!("add sf: {:?}", sf.clone());
+            Ok((sf, Type::Int))
         }
         Expr::Sub(l, r) => {
             let (s1, t1) = infer(ctx.clone(), *l.clone())?;
@@ -550,7 +565,7 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
 fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
     println!("type_inference: {:?}", expr);
     let (subst, ty) = infer(ctx, expr)?;
-    Ok(apply_subst(subst, ty).lower())
+    Ok(apply_subst(subst, ty))
 }
 
 fn type_check(expr: Expr) -> Result<Expr, String> {

@@ -1,6 +1,5 @@
 ---
 source: src/tests.rs
-assertion_line: 159
 expression: ty
 ---
-TyVar('a)
+Int -> Int -> Int
