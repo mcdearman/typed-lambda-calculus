@@ -1,6 +1,0 @@
----
-source: src/tests.rs
-assertion_line: 189
-expression: ty
----
-TyVar('a) -> TyVar('a) -> TyVar('a) -> TyVar('a)

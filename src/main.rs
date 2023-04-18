@@ -151,76 +151,88 @@ pub fn parser<'a, I: ValueInput<'a, Token = Token, Span = SimpleSpan>>(
 ) -> impl Parser<'a, I, Expr, extra::Err<Rich<'a, Token>>> {
     let ident = select! { Token::Ident(name) => name };
 
-    let expr =
-        recursive(|expr| {
-            let inline_expr =
-                recursive(|inline_expr| {
-                    let val = select! {
-                        Token::Int(n) => Expr::Int(n),
-                        Token::Bool(b) => Expr::Bool(b),
-                    };
+    let expr = recursive(|expr| {
+        let inline_expr = recursive(|inline_expr| {
+            let val = select! {
+                Token::Int(n) => Expr::Int(n),
+                Token::Bool(b) => Expr::Bool(b),
+            }
+            .boxed();
 
-                    // parse let
-                    let let_ = just(Token::Let)
-                        .ignore_then(ident)
-                        .then_ignore(just(Token::Eq))
-                        .then(inline_expr.clone())
-                        .then_ignore(just(Token::In))
-                        .then(expr.clone())
-                        .map(|((name, val), body)| {
-                            Expr::Let(InternedString::from(name), Box::new(val), Box::new(body))
-                        });
+            // parse let
+            let let_ = just(Token::Let)
+                .ignore_then(ident)
+                .then_ignore(just(Token::Eq))
+                .then(inline_expr.clone())
+                .then_ignore(just(Token::In))
+                .then(expr.clone())
+                .map(|((name, val), body)| {
+                    Expr::Let(InternedString::from(name), Box::new(val), Box::new(body))
+                })
+                .boxed();
 
-                    // parse curry lambda
-                    let lambda = just(Token::Lambda).ignore_then(
-                        ident
-                            .repeated()
-                            .foldr(just(Token::Arrow).ignore_then(expr.clone()), |arg, body| {
-                                Expr::Lambda(InternedString::from(arg), Box::new(body))
-                            }),
-                    );
+            // parse curry lambda
+            let lambda = just(Token::Lambda)
+                .ignore_then(
+                    ident
+                        .repeated()
+                        .foldr(just(Token::Arrow).ignore_then(expr.clone()), |arg, body| {
+                            Expr::Lambda(InternedString::from(arg), Box::new(body))
+                        }),
+                )
+                .boxed();
 
-                    let atom = choice((
-                        val,
-                        let_,
-                        lambda,
-                        ident.map(Expr::Var),
-                        expr.clone()
-                            .delimited_by(just(Token::LParen), just(Token::RParen)),
-                    ));
+            let atom = choice((
+                val,
+                let_,
+                lambda,
+                ident.map(Expr::Var),
+                expr.clone()
+                    .delimited_by(just(Token::LParen), just(Token::RParen)),
+            ))
+            .boxed();
 
-                    // parse function application
-                    let apply = atom.clone().foldl(atom.clone().repeated(), |f, arg| {
-                        Expr::Apply(Box::new(f), Box::new(arg))
-                    });
+            // parse function application
+            let apply = atom
+                .clone()
+                .foldl(atom.clone().repeated(), |f, arg| {
+                    Expr::Apply(Box::new(f), Box::new(arg))
+                })
+                .boxed();
 
-                    // parse arithmetic
-                    let op = just(Token::Mul).or(just(Token::Div));
+            // parse arithmetic
+            let op = just(Token::Mul).or(just(Token::Div)).boxed();
 
-                    let product = apply.clone().foldl(
-                        op.clone().then(apply.clone()).repeated(),
-                        |l, (op, r)| match op {
-                            Token::Mul => Expr::Mul(Box::new(l), Box::new(r)),
-                            Token::Div => Expr::Div(Box::new(l), Box::new(r)),
-                            _ => unreachable!(),
-                        },
-                    );
+            let product = apply
+                .clone()
+                .foldl(
+                    op.clone().then(apply.clone()).repeated(),
+                    |l, (op, r)| match op {
+                        Token::Mul => Expr::Mul(Box::new(l), Box::new(r)),
+                        Token::Div => Expr::Div(Box::new(l), Box::new(r)),
+                        _ => unreachable!(),
+                    },
+                )
+                .boxed();
 
-                    let op = just(Token::Add).or(just(Token::Sub));
-                    let sum = product.clone().foldl(
-                        op.clone().then(product.clone()).repeated(),
-                        |l, (op, r)| match op {
-                            Token::Add => Expr::Add(Box::new(l), Box::new(r)),
-                            Token::Sub => Expr::Sub(Box::new(l), Box::new(r)),
-                            _ => unreachable!(),
-                        },
-                    );
+            let op = just(Token::Add).or(just(Token::Sub)).boxed();
+            let sum = product
+                .clone()
+                .foldl(
+                    op.clone().then(product.clone()).repeated(),
+                    |l, (op, r)| match op {
+                        Token::Add => Expr::Add(Box::new(l), Box::new(r)),
+                        Token::Sub => Expr::Sub(Box::new(l), Box::new(r)),
+                        _ => unreachable!(),
+                    },
+                )
+                .boxed();
 
-                    sum
-                });
-
-            inline_expr
+            sum
         });
+
+        inline_expr
+    });
 
     expr
 }
@@ -265,7 +277,10 @@ impl Debug for Type {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
             Self::Var(n) => write!(f, "{:?}", n),
-            Self::Lambda(param, body) => write!(f, "{:?} -> {:?}", param, body),
+            Self::Lambda(param, body) => match param.as_ref() {
+                Self::Lambda(_, _) => write!(f, "({:?}) -> {:?}", param, body),
+                _ => write!(f, "{:?} -> {:?}", param, body),
+            },
         }
     }
 }
@@ -276,7 +291,10 @@ impl Display for Type {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
             Self::Var(n) => write!(f, "{}", n),
-            Self::Lambda(param, body) => write!(f, "{} -> {}", param, body),
+            Self::Lambda(param, body) => match param.as_ref() {
+                Self::Lambda(_, _) => write!(f, "({}) -> {}", param, body),
+                _ => write!(f, "{} -> {}", param, body),
+            },
         }
     }
 }
@@ -381,7 +399,7 @@ fn free_vars_scheme(scheme: Scheme) -> BTreeSet<TyVar> {
 
 fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
     if ty.clone() == Type::Var(var.clone()) {
-        println!("{} == {:?}", var, ty);
+        // println!("{} == {:?}", var, ty);
         Ok(HashMap::new())
     } else if free_vars(ty.clone()).contains(&var) {
         Err(format!("occurs check failed: {} occurs in {:?}", var, ty))
@@ -402,8 +420,8 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
                 apply_subst(s1.clone(), *b1.clone()),
                 apply_subst(s1.clone(), *b2.clone()),
             )?;
-            println!("unify s1: {:?}", s1);
-            println!("unify s2: {:?}", s2);
+            // println!("unify s1: {:?}", s1);
+            // println!("unify s2: {:?}", s2);
             Ok(compose_subst(s1.clone(), s2.clone()))
         }
         (Type::Var(n), t) | (t, Type::Var(n)) => var_bind(n.clone(), t.clone()),
@@ -457,7 +475,7 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
     match expr.clone() {
         Expr::Int(_) => Ok((HashMap::new(), Type::Int)),
         Expr::Bool(_) => Ok((HashMap::new(), Type::Bool)),
-        Expr::Var(name) => match ctx.vars.get(&name) {
+        Expr::Var(name) => match ctx.clone().vars.get(&name) {
             Some(scheme) => Ok((HashMap::new(), instantiate(scheme.clone()))),
             None => Err(format!("unbound variable: {:?}", expr)),
         },
@@ -465,6 +483,7 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             let ty_binder = Type::Var(TyVar::fresh());
             let tmp_ctx = Context {
                 vars: ctx
+                    .clone()
                     .vars
                     .into_iter()
                     .chain(vec![(name, Scheme::new(vec![], ty_binder.clone()))].into_iter())
@@ -488,14 +507,14 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
                 Type::Lambda(Box::new(ty_arg.clone()), Box::new(ty_ret.clone())),
             )?;
             let sf = compose_subst(s3.clone(), compose_subst(s2.clone(), s1.clone()));
-            println!("ty_fun: {:?}", ty_fun.clone());
-            println!("ty_arg: {:?}", ty_arg.clone());
-            // println!("ctx: {:?}", ctx.clone());
-            println!("s1: {:?}", s1);
-            println!("s2: {:?}", s2);
-            println!("s3: {:?}", s3);
-            println!("sf: {:?}", sf);
-            println!("ty_ret: {:?}", ty_ret.clone());
+            // println!("ty_fun: {:?}", ty_fun.clone());
+            // println!("ty_arg: {:?}", ty_arg.clone());
+            // // println!("ctx: {:?}", ctx.clone());
+            // println!("s1: {:?}", s1);
+            // println!("s2: {:?}", s2);
+            // println!("s3: {:?}", s3);
+            // println!("sf: {:?}", sf);
+            // println!("ty_ret: {:?}", ty_ret.clone());
             Ok((sf, apply_subst(s3, ty_ret.clone())))
         }
         Expr::Let(name, binding, body) => {
@@ -522,11 +541,11 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             let s3 = unify(t1, Type::Int)?;
             let s4 = unify(t2, Type::Int)?;
             let sf = compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone());
-            println!("add s1: {:?}", s1);
-            println!("add s2: {:?}", s2);
-            println!("add s3: {:?}", s3);
-            println!("add s4: {:?}", s4);
-            println!("add sf: {:?}", sf.clone());
+            // println!("add s1: {:?}", s1);
+            // println!("add s2: {:?}", s2);
+            // println!("add s3: {:?}", s3);
+            // println!("add s4: {:?}", s4);
+            // println!("add sf: {:?}", sf.clone());
             Ok((sf, Type::Int))
         }
         Expr::Sub(l, r) => {
@@ -563,14 +582,14 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
 }
 
 fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
-    println!("type_inference: {:?}", expr);
+    // println!("type_inference: {:?}", expr);
     let (subst, ty) = infer(ctx, expr)?;
     Ok(apply_subst(subst, ty))
 }
 
-fn type_check(expr: Expr) -> Result<Expr, String> {
-    type_inference(default_ctx(), expr.clone()).map(|_| expr.clone())
-}
+// fn type_check(expr: Expr) -> Result<(Expr, Type), String> {
+//     type_inference(default_ctx(), expr.clone()).map(|t| )
+// }
 
 fn default_ctx() -> Context {
     let mut ctx = Context {
@@ -647,7 +666,6 @@ impl Display for Value {
 }
 
 pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
-    type_check(expr.clone()).map_err(|e| format!("Type error: {}", e))?;
     match expr {
         Expr::Int(i) => Ok(Value::Int(*i)),
         Expr::Bool(b) => Ok(Value::Bool(*b)),
@@ -735,16 +753,27 @@ pub fn repl() {
                 let tok_stream =
                     Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
                 match parser().parse(tok_stream).into_result() {
-                    Ok(ast) => match eval(env.clone(), &ast) {
-                        Ok(val) => {
-                            println!("ast: {:?}", ast);
-                            println!("{}", val);
+                    Ok(expr) => {
+                        let ty = match type_inference(default_ctx(), expr.clone()) {
+                            Ok(ty) => ty,
+                            Err(e) => {
+                                // println!("ast: {:?}", expr);
+                                eprintln!("Error: {}", e);
+                                carry.clear();
+                                continue 'outer;
+                            }
+                        };
+                        match eval(env.clone(), &expr) {
+                            Ok(v) => {
+                                // println!("ast: {:?}", expr);
+                                println!("val: {} = {}", ty, v);
+                            }
+                            Err(e) => {
+                                // println!("ast: {:?}", expr);
+                                eprintln!("Error: {}", e);
+                            }
                         }
-                        Err(e) => {
-                            println!("ast: {:?}", ast);
-                            eprintln!("Error: {}", e);
-                        }
-                    },
+                    }
                     Err(e) => {
                         println!("Error: {:?}", e);
                         carry.clear();
