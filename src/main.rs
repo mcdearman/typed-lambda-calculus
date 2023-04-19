@@ -250,7 +250,7 @@ pub enum Type {
 }
 
 impl Type {
-    fn lower<'a>(&self, vars: &mut HashMap<TyVar, TyVar>) -> Self {
+    fn lower(&self, vars: &mut HashMap<TyVar, TyVar>) -> Self {
         match self.clone() {
             Self::Int => Self::Int,
             Self::Bool => Self::Bool,
