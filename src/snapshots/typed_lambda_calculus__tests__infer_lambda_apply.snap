@@ -1,0 +1,5 @@
+---
+source: src/tests.rs
+expression: ty
+---
+(TyVar('a) -> TyVar('b)) -> TyVar('a) -> TyVar('b)

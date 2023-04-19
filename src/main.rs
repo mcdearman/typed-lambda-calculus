@@ -250,13 +250,12 @@ pub enum Type {
 }
 
 impl Type {
-    fn lower(&self) -> Self {
-        let mut vars = HashMap::new();
-        match self {
+    fn lower<'a>(&self, vars: &mut HashMap<TyVar, TyVar>) -> Self {
+        match self.clone() {
             Self::Int => Self::Int,
             Self::Bool => Self::Bool,
             Self::Var(name) => {
-                if let Some(n) = vars.get(name) {
+                if let Some(n) = vars.get(&name) {
                     Self::Var(*n)
                 } else {
                     let n = vars.len();
@@ -265,7 +264,7 @@ impl Type {
                 }
             }
             Self::Lambda(param, body) => {
-                Self::Lambda(Box::new(param.lower()), Box::new(body.lower()))
+                Self::Lambda(Box::new(param.lower(vars)), Box::new(body.lower(vars)))
             }
         }
     }
@@ -273,7 +272,7 @@ impl Type {
 
 impl Debug for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.clone().lower() {
+        match self.clone() {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
             Self::Var(n) => write!(f, "{:?}", n),
@@ -287,7 +286,7 @@ impl Debug for Type {
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.clone().lower() {
+        match self.clone() {
             Self::Int => write!(f, "Int"),
             Self::Bool => write!(f, "Bool"),
             Self::Var(n) => write!(f, "{}", n),
@@ -399,7 +398,6 @@ fn free_vars_scheme(scheme: Scheme) -> BTreeSet<TyVar> {
 
 fn var_bind(var: TyVar, ty: Type) -> Result<Substitution, String> {
     if ty.clone() == Type::Var(var.clone()) {
-        // println!("{} == {:?}", var, ty);
         Ok(HashMap::new())
     } else if free_vars(ty.clone()).contains(&var) {
         Err(format!("occurs check failed: {} occurs in {:?}", var, ty))
@@ -420,8 +418,6 @@ pub fn unify(t1: Type, t2: Type) -> Result<Substitution, String> {
                 apply_subst(s1.clone(), *b1.clone()),
                 apply_subst(s1.clone(), *b2.clone()),
             )?;
-            // println!("unify s1: {:?}", s1);
-            // println!("unify s2: {:?}", s2);
             Ok(compose_subst(s1.clone(), s2.clone()))
         }
         (Type::Var(n), t) | (t, Type::Var(n)) => var_bind(n.clone(), t.clone()),
@@ -507,19 +503,10 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
                 Type::Lambda(Box::new(ty_arg.clone()), Box::new(ty_ret.clone())),
             )?;
             let sf = compose_subst(s3.clone(), compose_subst(s2.clone(), s1.clone()));
-            // println!("ty_fun: {:?}", ty_fun.clone());
-            // println!("ty_arg: {:?}", ty_arg.clone());
-            // // println!("ctx: {:?}", ctx.clone());
-            // println!("s1: {:?}", s1);
-            // println!("s2: {:?}", s2);
-            // println!("s3: {:?}", s3);
-            // println!("sf: {:?}", sf);
-            // println!("ty_ret: {:?}", ty_ret.clone());
             Ok((sf, apply_subst(s3, ty_ret.clone())))
         }
         Expr::Let(name, binding, body) => {
             let (s1, t1) = infer(ctx.clone(), *binding.clone())?;
-            // let scheme = generalize(apply_subst_ctx(s1.clone(), ctx.clone()), t1.clone());
             let scheme = Scheme {
                 vars: vec![],
                 ty: apply_subst(s1.clone(), t1.clone()),
@@ -541,11 +528,6 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
             let s3 = unify(t1, Type::Int)?;
             let s4 = unify(t2, Type::Int)?;
             let sf = compose_subst(compose_subst(s4.clone(), s3.clone()), s2.clone());
-            // println!("add s1: {:?}", s1);
-            // println!("add s2: {:?}", s2);
-            // println!("add s3: {:?}", s3);
-            // println!("add s4: {:?}", s4);
-            // println!("add sf: {:?}", sf.clone());
             Ok((sf, Type::Int))
         }
         Expr::Sub(l, r) => {
@@ -582,14 +564,9 @@ fn infer(ctx: Context, expr: Expr) -> Result<(Substitution, Type), String> {
 }
 
 fn type_inference(ctx: Context, expr: Expr) -> Result<Type, String> {
-    // println!("type_inference: {:?}", expr);
     let (subst, ty) = infer(ctx, expr)?;
-    Ok(apply_subst(subst, ty))
+    Ok(apply_subst(subst, ty).lower(&mut HashMap::new()))
 }
-
-// fn type_check(expr: Expr) -> Result<(Expr, Type), String> {
-//     type_inference(default_ctx(), expr.clone()).map(|t| )
-// }
 
 fn default_ctx() -> Context {
     let mut ctx = Context {
