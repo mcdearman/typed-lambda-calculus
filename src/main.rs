@@ -572,29 +572,30 @@ fn default_ctx() -> Context {
     let mut ctx = Context {
         vars: HashMap::new(),
     };
-    ctx.vars.insert(
-        InternedString::from("id"),
+    ctx.vars.insert(InternedString::from("id"), {
+        let a = TyVar::fresh();
         Scheme::new(
-            vec![TyVar::fresh()],
+            vec![a.clone()],
             Type::Lambda(
-                Box::new(Type::Var(TyVar::fresh())),
-                Box::new(Type::Var(TyVar::fresh())),
+                Box::new(Type::Var(a.clone())),
+                Box::new(Type::Var(a.clone())),
             ),
-        ),
-    );
-    ctx.vars.insert(
-        InternedString::from("const"),
+        )
+    });
+    ctx.vars.insert(InternedString::from("const"), {
+        let a = TyVar::fresh();
+        let b = TyVar::fresh();
         Scheme::new(
-            vec![TyVar::fresh(), TyVar::fresh()],
+            vec![a.clone(), b.clone()],
             Type::Lambda(
-                Box::new(Type::Var(TyVar::fresh())),
+                Box::new(Type::Var(a.clone())),
                 Box::new(Type::Lambda(
-                    Box::new(Type::Var(TyVar::fresh())),
-                    Box::new(Type::Var(TyVar::fresh())),
+                    Box::new(Type::Var(b.clone())),
+                    Box::new(Type::Var(a.clone())),
                 )),
             ),
-        ),
-    );
+        )
+    });
     ctx
 }
 
