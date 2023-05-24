@@ -811,6 +811,21 @@ fn default_ctx() -> Context {
 // =====================================================================
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeError(pub String);
+
+impl RuntimeError {
+    pub fn new(msg: String) -> RuntimeError {
+        RuntimeError(msg)
+    }
+}
+
+impl From<&str> for RuntimeError {
+    fn from(msg: &str) -> RuntimeError {
+        RuntimeError::new(msg.to_string())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     Int(i64),
     Bool(bool),
@@ -847,6 +862,41 @@ pub enum Instr {
     Return,
     Jeq(u16),
     Halt,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CallFrame {
+    pub pc: usize,
+    pub bp: usize,
+}
+
+pub struct VM {
+    code: Vec<Instr>,
+    stack: Vec<Value>,
+    call_stack: Vec<CallFrame>,
+}
+
+impl VM {
+    pub fn new(code: Vec<Instr>) -> Self {
+        Self {
+            code,
+            stack: vec![],
+            call_stack: vec![],
+        }
+    }
+
+    fn push(&mut self, val: Value) {
+        self.stack.push(val);
+    }
+
+    fn pop(&mut self) -> Value {
+        self.stack.pop().expect("stack underflow")
+    }
+
+    pub fn execute(&mut self) -> Result<(), RuntimeError> {
+        let instr = &self.code[self.call_stack.last().unwrap().pc];
+        todo!()
+    }
 }
 
 // =====================================================================
