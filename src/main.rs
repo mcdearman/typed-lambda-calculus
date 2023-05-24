@@ -607,203 +607,246 @@ fn default_ctx() -> Context {
 // =                             Eval                                  =
 // =====================================================================
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct Env {
-    parent: Option<Rc<RefCell<Env>>>,
-    vars: HashMap<InternedString, Expr>,
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct Env {
+//     parent: Option<Rc<RefCell<Env>>>,
+//     vars: HashMap<InternedString, Expr>,
+// }
 
-impl Env {
-    pub fn new() -> Self {
-        Self {
-            parent: None,
-            vars: HashMap::new(),
-        }
-    }
+// impl Env {
+//     pub fn new() -> Self {
+//         Self {
+//             parent: None,
+//             vars: HashMap::new(),
+//         }
+//     }
 
-    pub fn create_child(parent: Rc<RefCell<Self>>) -> Self {
-        Self {
-            parent: Some(parent),
-            vars: HashMap::new(),
-        }
-    }
+//     pub fn create_child(parent: Rc<RefCell<Self>>) -> Self {
+//         Self {
+//             parent: Some(parent),
+//             vars: HashMap::new(),
+//         }
+//     }
 
-    pub fn define(&mut self, name: InternedString, val: Expr) {
-        self.vars.insert(name, val);
-    }
+//     pub fn define(&mut self, name: InternedString, val: Expr) {
+//         self.vars.insert(name, val);
+//     }
 
-    pub fn lookup(&self, name: &InternedString) -> Option<Expr> {
-        if let Some(v) = self.vars.get(name) {
-            Some(v.clone())
-        } else if let Some(parent) = &self.parent {
-            parent.as_ref().borrow().lookup(name)
-        } else {
-            None
-        }
-    }
-}
+//     pub fn lookup(&self, name: &InternedString) -> Option<Expr> {
+//         if let Some(v) = self.vars.get(name) {
+//             Some(v.clone())
+//         } else if let Some(parent) = &self.parent {
+//             parent.as_ref().borrow().lookup(name)
+//         } else {
+//             None
+//         }
+//     }
+// }
 
-fn default_env() -> Env {
-    let mut env = Env::new();
-    env.define(
-        InternedString::from("id"),
-        Expr::Lambda("x".into(), Box::new(Expr::Var("x".into()))),
-    );
-    env.define(
-        InternedString::from("const"),
-        Expr::Lambda(
-            "x".into(),
-            Box::new(Expr::Lambda("y".into(), Box::new(Expr::Var("x".into())))),
-        ),
-    );
-    env
-}
+// fn default_env() -> Env {
+//     let mut env = Env::new();
+//     env.define(
+//         InternedString::from("id"),
+//         Expr::Lambda("x".into(), Box::new(Expr::Var("x".into()))),
+//     );
+//     env.define(
+//         InternedString::from("const"),
+//         Expr::Lambda(
+//             "x".into(),
+//             Box::new(Expr::Lambda("y".into(), Box::new(Expr::Var("x".into())))),
+//         ),
+//     );
+//     env
+// }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    Int(i64),
-    Bool(bool),
-    Lambda(InternedString, Box<Expr>, Rc<RefCell<Env>>),
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub enum Value {
+//     Int(i64),
+//     Bool(bool),
+//     Lambda(InternedString, Box<Expr>, Rc<RefCell<Env>>),
+// }
 
-impl Display for Value {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Int(n) => write!(f, "{}", n),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Lambda(param, body, _) => write!(f, "\\{} -> {}", param, body),
-        }
-    }
-}
+// impl Display for Value {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             Self::Int(n) => write!(f, "{}", n),
+//             Self::Bool(b) => write!(f, "{}", b),
+//             Self::Lambda(param, body, _) => write!(f, "\\{} -> {}", param, body),
+//         }
+//     }
+// }
 
-pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
-    match expr {
-        Expr::Int(i) => Ok(Value::Int(*i)),
-        Expr::Bool(b) => Ok(Value::Bool(*b)),
-        Expr::Lambda(p, b) => {
-            let fn_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
-            Ok(Value::Lambda(p.clone(), b.clone(), fn_env))
-        }
-        Expr::Var(name) => {
-            if let Some(val) = env.as_ref().borrow().lookup(name) {
-                eval(env.clone(), &val)
-            } else {
-                Err(format!("Unbound variable `{}`", name))
-            }
-        }
-        Expr::Apply(lambda, value) => match eval(env.clone(), lambda)? {
-            Value::Lambda(param, body, fn_env) => {
-                fn_env
-                    .as_ref()
-                    .borrow_mut()
-                    .define(param.clone(), *value.clone());
-                eval(fn_env, &body)
-            }
-            _ => Err(format!("Expected callable lambda, got `{:?}`", lambda)),
-        },
-        Expr::Let(name, value, body) => {
-            let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
-            child_env
-                .as_ref()
-                .borrow_mut()
-                .define(name.clone(), *value.clone());
-            eval(child_env, body)
-        }
-        Expr::Add(l, r) => match (
-            eval(env.clone(), l.as_ref())?,
-            eval(env.clone(), r.as_ref())?,
-        ) {
-            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
-            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
-        },
-        Expr::Sub(l, r) => match (
-            eval(env.clone(), l.as_ref())?,
-            eval(env.clone(), r.as_ref())?,
-        ) {
-            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
-            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
-        },
-        Expr::Mul(l, r) => match (
-            eval(env.clone(), l.as_ref())?,
-            eval(env.clone(), r.as_ref())?,
-        ) {
-            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
-            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
-        },
-        Expr::Div(l, r) => match (
-            eval(env.clone(), l.as_ref())?,
-            eval(env.clone(), r.as_ref())?,
-        ) {
-            (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l / r)),
-            _ => Err(format!("Expected two integers, got {} and {}", l, r)),
-        },
-    }
-}
+// pub fn eval(env: Rc<RefCell<Env>>, expr: &Expr) -> Result<Value, String> {
+//     match expr {
+//         Expr::Int(i) => Ok(Value::Int(*i)),
+//         Expr::Bool(b) => Ok(Value::Bool(*b)),
+//         Expr::Lambda(p, b) => {
+//             let fn_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
+//             Ok(Value::Lambda(p.clone(), b.clone(), fn_env))
+//         }
+//         Expr::Var(name) => {
+//             if let Some(val) = env.as_ref().borrow().lookup(name) {
+//                 eval(env.clone(), &val)
+//             } else {
+//                 Err(format!("Unbound variable `{}`", name))
+//             }
+//         }
+//         Expr::Apply(lambda, value) => match eval(env.clone(), lambda)? {
+//             Value::Lambda(param, body, fn_env) => {
+//                 fn_env
+//                     .as_ref()
+//                     .borrow_mut()
+//                     .define(param.clone(), *value.clone());
+//                 eval(fn_env, &body)
+//             }
+//             _ => Err(format!("Expected callable lambda, got `{:?}`", lambda)),
+//         },
+//         Expr::Let(name, value, body) => {
+//             let child_env = Rc::new(RefCell::new(Env::create_child(env.clone())));
+//             child_env
+//                 .as_ref()
+//                 .borrow_mut()
+//                 .define(name.clone(), *value.clone());
+//             eval(child_env, body)
+//         }
+//         Expr::Add(l, r) => match (
+//             eval(env.clone(), l.as_ref())?,
+//             eval(env.clone(), r.as_ref())?,
+//         ) {
+//             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l + r)),
+//             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+//         },
+//         Expr::Sub(l, r) => match (
+//             eval(env.clone(), l.as_ref())?,
+//             eval(env.clone(), r.as_ref())?,
+//         ) {
+//             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l - r)),
+//             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+//         },
+//         Expr::Mul(l, r) => match (
+//             eval(env.clone(), l.as_ref())?,
+//             eval(env.clone(), r.as_ref())?,
+//         ) {
+//             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l * r)),
+//             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+//         },
+//         Expr::Div(l, r) => match (
+//             eval(env.clone(), l.as_ref())?,
+//             eval(env.clone(), r.as_ref())?,
+//         ) {
+//             (Value::Int(l), Value::Int(r)) => Ok(Value::Int(l / r)),
+//             _ => Err(format!("Expected two integers, got {} and {}", l, r)),
+//         },
+//     }
+// }
 
 // =====================================================================
 // =                             REPL                                  =
 // =====================================================================
 
-pub fn repl() {
-    println!("Welcome to the Lust REPL!");
-    print!("> ");
-    io::stdout().flush().expect("failed to flush stdout");
-    let mut src = String::new();
-    let mut carry = String::new();
-    let env = Rc::new(RefCell::new(default_env()));
-    'outer: loop {
-        std::io::stdin()
-            .read_line(&mut src)
-            .expect("failed to read line");
-        for expr_str in src.trim_end().split_inclusive(";;") {
-            if expr_str.ends_with(";;") {
-                let expr_str = carry.clone() + expr_str.trim_end_matches(";;");
-                let lex = Token::lexer(&expr_str)
-                    .spanned()
-                    .map(|(tok, span)| (tok, SimpleSpan::from(span)));
-                let tok_stream =
-                    Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
-                match parser().parse(tok_stream).into_result() {
-                    Ok(expr) => {
-                        let ty = match type_inference(default_ctx(), expr.clone()) {
-                            Ok(ty) => ty,
-                            Err(e) => {
-                                // println!("ast: {:?}", expr);
-                                eprintln!("Error: {}", e);
-                                carry.clear();
-                                continue 'outer;
-                            }
-                        };
-                        match eval(env.clone(), &expr) {
-                            Ok(v) => {
-                                // println!("ast: {:?}", expr);
-                                println!("val: {} = {}", ty, v);
-                            }
-                            Err(e) => {
-                                // println!("ast: {:?}", expr);
-                                eprintln!("Error: {}", e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!("Error: {:?}", e);
-                        carry.clear();
-                        continue 'outer;
-                    }
-                }
-                carry.clear();
-            } else {
-                carry.push_str(expr_str);
-                src.clear();
-                print!("- ");
-                io::stdout().flush().expect("failed to flush stdout");
-                continue 'outer;
-            }
-        }
-        src.clear();
-        print!("\n> ");
-        io::stdout().flush().expect("failed to flush stdout");
-    }
+// pub fn repl() {
+//     println!("Welcome to the Lust REPL!");
+//     print!("> ");
+//     io::stdout().flush().expect("failed to flush stdout");
+//     let mut src = String::new();
+//     let mut carry = String::new();
+//     let env = Rc::new(RefCell::new(default_env()));
+//     'outer: loop {
+//         std::io::stdin()
+//             .read_line(&mut src)
+//             .expect("failed to read line");
+//         for expr_str in src.trim_end().split_inclusive(";;") {
+//             if expr_str.ends_with(";;") {
+//                 let expr_str = carry.clone() + expr_str.trim_end_matches(";;");
+//                 let lex = Token::lexer(&expr_str)
+//                     .spanned()
+//                     .map(|(tok, span)| (tok, SimpleSpan::from(span)));
+//                 let tok_stream =
+//                     Stream::from_iter(lex).spanned(SimpleSpan::from(src.len()..src.len()));
+//                 match parser().parse(tok_stream).into_result() {
+//                     Ok(expr) => {
+//                         let ty = match type_inference(default_ctx(), expr.clone()) {
+//                             Ok(ty) => ty,
+//                             Err(e) => {
+//                                 // println!("ast: {:?}", expr);
+//                                 eprintln!("Error: {}", e);
+//                                 carry.clear();
+//                                 continue 'outer;
+//                             }
+//                         };
+//                         match eval(env.clone(), &expr) {
+//                             Ok(v) => {
+//                                 // println!("ast: {:?}", expr);
+//                                 println!("val: {} = {}", ty, v);
+//                             }
+//                             Err(e) => {
+//                                 // println!("ast: {:?}", expr);
+//                                 eprintln!("Error: {}", e);
+//                             }
+//                         }
+//                     }
+//                     Err(e) => {
+//                         println!("Error: {:?}", e);
+//                         carry.clear();
+//                         continue 'outer;
+//                     }
+//                 }
+//                 carry.clear();
+//             } else {
+//                 carry.push_str(expr_str);
+//                 src.clear();
+//                 print!("- ");
+//                 io::stdout().flush().expect("failed to flush stdout");
+//                 continue 'outer;
+//             }
+//         }
+//         src.clear();
+//         print!("\n> ");
+//         io::stdout().flush().expect("failed to flush stdout");
+//     }
+// }
+
+// =====================================================================
+// =                              VM                                   =
+// =====================================================================
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Int(i64),
+    Bool(bool),
+    Lambda(u16),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Instr {
+    Load(u16),
+    Store(Value),
+    LoadConst(u16),
+    StoreConst(Value),
+    Push(Value),
+    Pop,
+    Dup,
+    Swap,
+    Drop,
+    Neg,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    And,
+    Or,
+    Xor,
+    Not,
+    Eq,
+    Neq,
+    Lt,
+    Gt,
+    Jump(u16),
+    Call(u16),
+    Return,
+    Jeq(u16),
+    Halt,
 }
 
 // =====================================================================
@@ -811,5 +854,5 @@ pub fn repl() {
 // =====================================================================
 
 fn main() {
-    repl();
+    // repl();
 }
