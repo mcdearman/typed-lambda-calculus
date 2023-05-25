@@ -866,12 +866,12 @@ pub enum Instr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CallFrame {
-    pub pc: usize,
+    pub ip: usize,
+    pub chunk: Vec<Instr>,
     pub bp: usize,
 }
 
 pub struct VM {
-    code: Vec<Instr>,
     stack: Vec<Value>,
     call_stack: Vec<CallFrame>,
 }
@@ -879,7 +879,6 @@ pub struct VM {
 impl VM {
     pub fn new(code: Vec<Instr>) -> Self {
         Self {
-            code,
             stack: vec![],
             call_stack: vec![],
         }
@@ -893,9 +892,33 @@ impl VM {
         self.stack.pop().expect("stack underflow")
     }
 
-    pub fn execute(&mut self) -> Result<(), RuntimeError> {
+    pub fn execute(&mut self) -> Result<Value, RuntimeError> {
         let instr = &self.code[self.call_stack.last().unwrap().pc];
         todo!()
+    }
+}
+
+// =====================================================================
+// =                            Compiler                               =
+// =====================================================================
+
+pub struct Compiler {
+    code: Vec<Instr>,
+    env: HashMap<String, u16>,
+    next_var: u16,
+}
+
+impl Compiler {
+    pub fn new() -> Self {
+        Self {
+            code: vec![],
+            env: HashMap::new(),
+            next_var: 0,
+        }
+    }
+
+    pub fn compile(&mut self) -> Vec<Instr> {
+        self.code.clone()
     }
 }
 
