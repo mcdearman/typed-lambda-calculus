@@ -84,6 +84,12 @@ pub struct CallFrame {
     pub bp: usize,
 }
 
+impl CallFrame {
+    pub fn new(ip: usize, chunk: Vec<Instr>, bp: usize) -> Self {
+        Self { ip, chunk, bp }
+    }
+}
+
 pub struct VM {
     stack: Vec<Value>,
     call_stack: Vec<CallFrame>,
