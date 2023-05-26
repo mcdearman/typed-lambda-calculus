@@ -3,7 +3,6 @@ use std::default;
 use chumsky::{input::Stream, prelude::Input, span::SimpleSpan, Parser};
 use logos::Logos;
 
-use crate::{default_ctx, infer, parser, type_inference, Token};
 
 // ============================================================================
 //                                  Parser
