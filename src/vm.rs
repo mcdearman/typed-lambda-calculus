@@ -16,13 +16,6 @@ impl From<&str> for RuntimeError {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Value {
-    Int(i64),
-    Bool(bool),
-    Lambda(Rc<ObjClosure>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum Instr {
     Load(u16),
     Store(Value),
@@ -56,8 +49,15 @@ pub enum Instr {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Value {
+    Int(i64),
+    Bool(bool),
+    Lambda(Rc<ObjClosure>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ObjClosure {
-    pub fun: Box<ObjFunction>,
+    pub fun: Rc<ObjFunction>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -106,7 +106,6 @@ impl VM {
     }
 
     pub fn exec(&mut self) -> Result<Value, RuntimeError> {
-        let instr = &self.code[self.call_stack.last().unwrap().pc];
         todo!()
     }
 }
