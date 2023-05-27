@@ -1,39 +1,40 @@
-use crate::vm::Instr;
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct CompilerError(pub String);
+// use crate::vm::chunk::Chunk;
 
-impl CompilerError {
-    pub fn new(msg: String) -> CompilerError {
-        CompilerError(msg)
-    }
-}
+// #[derive(Debug, Clone, PartialEq)]
+// pub struct CompilerError(pub String);
 
-impl From<&str> for CompilerError {
-    fn from(msg: &str) -> CompilerError {
-        CompilerError::new(msg.to_string())
-    }
-}
+// impl CompilerError {
+//     pub fn new(msg: String) -> CompilerError {
+//         CompilerError(msg)
+//     }
+// }
 
-pub type Result<T> = std::result::Result<T, CompilerError>;
+// impl From<&str> for CompilerError {
+//     fn from(msg: &str) -> CompilerError {
+//         CompilerError::new(msg.to_string())
+//     }
+// }
 
-pub struct Compiler {
-    code: Vec<Instr>,
-    env: HashMap<String, u16>,
-    next_var: u16,
-}
+// pub type Result<T> = std::result::Result<T, CompilerError>;
 
-impl Compiler {
-    pub fn new() -> Self {
-        Self {
-            code: vec![],
-            env: HashMap::new(),
-            next_var: 0,
-        }
-    }
+// pub struct Compiler {
+//     chunk: Chunk,
+//     env: HashMap<String, u16>,
+//     next_var: u16,
+// }
 
-    pub fn compile(&mut self) -> Result<Vec<Instr>> {
-        todo!()
-    }
-}
+// impl Compiler {
+//     pub fn new() -> Self {
+//         Self {
+//             chunk: Chunk::new(),
+//             env: HashMap::new(),
+//             next_var: 0,
+//         }
+//     }
+
+//     pub fn compile(&mut self) -> Result<Vec<Instr>> {
+//         todo!()
+//     }
+// }

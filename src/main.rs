@@ -1,15 +1,6 @@
-use lasso::Spur;
-use lasso::ThreadedRodeo;
-use logos::Logos;
-use once_cell::sync::Lazy;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::fmt::{Debug, Display};
-use std::io;
-use std::io::Write;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::{cell::RefCell, rc::Rc};
+use vm::chunk::Chunk;
+
+use crate::vm::opcode::OpCode;
 
 mod compiler;
 mod intern;
@@ -19,5 +10,7 @@ mod typing;
 mod vm;
 
 fn main() {
-    // repl();
+    let mut c = Chunk::new();
+    c.write(OpCode::Return as u8);
+    println!("{:?}", c);
 }
