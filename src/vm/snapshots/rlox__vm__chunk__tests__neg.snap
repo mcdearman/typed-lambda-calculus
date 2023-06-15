@@ -1,0 +1,6 @@
+---
+source: src/vm/chunk.rs
+expression: chunk
+---
+0000    0 NEG
+

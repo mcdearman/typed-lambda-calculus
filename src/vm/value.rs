@@ -1,34 +1,18 @@
-// use std::rc::Rc;
+use std::fmt::Display;
 
-// use super::opcode::Instr;
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum Value {
+    Bool(bool),
+    Number(f64),
+    Nil,
+}
 
-// #[derive(Debug, Clone, PartialEq)]
-// pub enum Value {
-//     Int(i64),
-//     Bool(bool),
-//     Lambda(Rc<ObjClosure>),
-// }
-
-pub type Value = i64;
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct ObjClosure {
-//     pub fun: Rc<ObjFunction>,
-// }
-
-// #[derive(Debug, Clone, PartialEq)]
-// pub struct ObjFunction {
-//     pub arity: u16,
-//     pub code: Vec<Instr>,
-//     // pub name: String,
-// }
-
-// impl ObjFunction {
-//     pub fn new() -> Self {
-//         Self {
-//             arity: 0,
-//             code: vec![],
-//             // name: String::new(),
-//         }
-//     }
-// }
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::Bool(b) => write!(f, "{}", b),
+            Value::Number(n) => write!(f, "{:.2}", n),
+            Value::Nil => write!(f, "nil"),
+        }
+    }
+}

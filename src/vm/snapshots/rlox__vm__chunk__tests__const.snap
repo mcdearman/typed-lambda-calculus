@@ -1,0 +1,7 @@
+---
+source: src/vm/chunk.rs
+expression: chunk
+---
+0000    0 CONST    0 '1.2'
+0002    1 CONST    1 '2.3'
+
