@@ -35,8 +35,6 @@ pub enum Token {
     RParen,
     #[regex(r"[ \t\n\r]", logos::skip)]
     Whitespace,
-    #[error]
-    Err,
 }
 
 impl Display for Token {
