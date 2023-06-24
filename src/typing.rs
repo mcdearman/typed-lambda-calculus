@@ -110,7 +110,7 @@ impl Display for TyVar {
 fn apply_subst(subst: Substitution, ty: Type) -> Type {
     match ty {
         Type::Int | Type::Bool => ty.clone(),
-        Type::Var(n) => subst.get(&n).cloned().unwrap_or_else(|| ty.clone()),
+        Type::Var(n) => subst.get(&n).cloned().unwrap_or(ty.clone()),
         Type::Lambda(param, body) => Type::Lambda(
             Box::new(apply_subst(subst.clone(), *param)),
             Box::new(apply_subst(subst.clone(), *body)),
