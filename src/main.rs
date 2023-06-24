@@ -10,7 +10,7 @@ mod typing;
 mod vm;
 
 fn main() {
-    let mut c = Chunk::new();
-    c.write(OpCode::Return as u8);
-    println!("{:?}", c);
+    // let mut c = Chunk::new();
+    // c.write(OpCode::Return as u8);
+    // println!("{:?}", c);
 }
